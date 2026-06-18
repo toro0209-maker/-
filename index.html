@@ -2,534 +2,346 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#f7f4ec" />
-<meta name="description" content="매일 마주하고 싶은 문장을 카드로 모아두고, 그 안에서 얻은 인사이트를 적어두는 성찰 노트" />
-<title>성찰의 카드</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>자기계발 장부</title>
+<meta name="theme-color" content="#1F2A24" />
 <link rel="manifest" href="manifest.json" />
-<link rel="icon" href="icon-192.png" />
-<link rel="apple-touch-icon" href="icon-192.png" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="성찰의 카드" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
 
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600;700&family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 <style>
-  :root {
-    --ink: #1d1b16;
-    --paper: #f7f4ec;
-    --accent: #9a6b3f;
-    --line: #e2dccd;
-    --card: #fffdf8;
-    --serif: "Gowun Batang", "Iowan Old Style", Georgia, serif;
-    --sans: "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: var(--paper); }
-  body {
-    color: var(--ink);
-    font-family: var(--serif);
-    -webkit-font-smoothing: antialiased;
-  }
-  textarea::placeholder, input::placeholder { color: #b3ac9a; }
-  button { font-family: inherit; }
+:root{
+  --ink:#1F2A24;
+  --ink-soft:#3A453E;
+  --paper:#F3EDE0;
+  --paper-deep:#E8E0CC;
+  --paper-line:#C9BFA5;
+  --stamp:#8B3A2F;
+  --stamp-soft:#8B3A2F22;
+  --gold:#9C7A3C;
+  --serif:'Noto Serif KR', serif;
+  --sans:'Pretendard', -apple-system, sans-serif;
+  --shadow: 0 1px 2px rgba(31,42,36,0.08), 0 2px 8px rgba(31,42,36,0.06);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(156,122,60,0.05), transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(139,58,47,0.04), transparent 40%);
+  color:var(--ink);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+button{font-family:var(--sans);cursor:pointer;border:none;background:none;color:inherit;}
+input,textarea{font-family:var(--sans);}
+a{color:var(--stamp);}
 
-  .rc-card { transition: transform .15s ease, box-shadow .15s ease; }
-  .rc-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(40,30,10,0.09); }
-  .rc-card:focus-visible, button:focus-visible, textarea:focus-visible, input:focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 2px;
-  }
-  @media (prefers-reduced-motion: reduce) { .rc-card { transition: none; } }
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-thumb{background:var(--paper-line);border-radius:4px;}
 
-  #fallback-msg {
-    max-width: 480px; margin: 80px auto; padding: 0 20px;
-    text-align: center; font-family: var(--sans); color: var(--ink);
-  }
+/* ===== App Shell ===== */
+#app{max-width:680px;margin:0 auto;padding:0 16px 80px;min-height:100vh;}
 
-  @keyframes rc-spin { to { transform: rotate(360deg); } }
-  .rc-spinner {
-    width: 14px; height: 14px; border-radius: 50%;
-    border: 2px solid rgba(154,107,63,0.25); border-top-color: var(--accent);
-    animation: rc-spin .7s linear infinite; display: inline-block;
-  }
+/* ===== Header ===== */
+.app-header{
+  position:sticky;top:0;z-index:30;
+  background:var(--paper);
+  padding:18px 0 12px;
+  border-bottom:1px solid var(--paper-line);
+}
+.header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.brand{display:flex;flex-direction:column;gap:2px;}
+.brand-eyebrow{
+  font-family:var(--sans);font-size:11px;letter-spacing:0.12em;
+  color:var(--ink-soft);text-transform:uppercase;font-weight:600;
+}
+.brand-title{
+  font-family:var(--serif);font-size:22px;font-weight:700;color:var(--ink);
+  letter-spacing:-0.01em;
+}
+.sync-pill{
+  font-family:var(--sans);font-size:11px;color:var(--ink-soft);
+  border:1px solid var(--paper-line);border-radius:20px;padding:5px 10px;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;
+  background:rgba(255,255,255,0.4);
+}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:#5C7A5E;flex-shrink:0;}
+.sync-dot.off{background:#B5523E;}
+
+/* ===== Calendar stamp block ===== */
+.cal-wrap{margin-top:14px;}
+.cal-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.cal-month{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--ink);}
+.cal-nav{display:flex;gap:2px;}
+.cal-nav button{
+  width:26px;height:26px;border-radius:6px;color:var(--ink-soft);font-size:14px;
+  display:flex;align-items:center;justify-content:center;
+}
+.cal-nav button:hover{background:var(--paper-deep);}
+.cal-grid{
+  display:flex;flex-wrap:wrap;gap:4px;
+}
+.cal-dow{
+  width:calc((100% - 24px)/7);
+  font-size:10px;color:var(--ink-soft);text-align:center;padding-bottom:2px;
+  font-weight:600;opacity:0.6;
+}
+.cal-cell{
+  position:relative;width:calc((100% - 24px)/7);height:38px;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;
+}
+.cal-cell.pad{visibility:hidden;}
+.cal-daynum{
+  font-family:var(--sans);font-size:12px;color:var(--ink-soft);position:relative;z-index:2;
+}
+.cal-cell.today .cal-daynum{color:var(--stamp);font-weight:700;}
+.cal-cell.today::after{
+  content:'';position:absolute;inset:2px;border:1px solid var(--stamp);border-radius:8px;
+}
+.stamp-ring{
+  position:absolute;inset:3px;border-radius:50%;
+}
+/* progress ring via conic-gradient, hand-stamped feel via slight rotation/opacity */
+.stamp-ring svg{width:100%;height:100%;transform:rotate(-90deg);}
+.stamp-ring circle.track{stroke:var(--paper-line);}
+.stamp-ring circle.fill{stroke:var(--stamp);stroke-linecap:round;transition:stroke-dashoffset 0.3s;}
+.cal-cell.full .stamp-ring circle.fill{stroke:var(--stamp);}
+.cal-cell.full .cal-daynum{color:#fff;font-weight:700;}
+.cal-cell.full .stamp-fill-bg{
+  position:absolute;inset:3px;border-radius:50%;background:var(--stamp);opacity:0.92;
+}
+.cal-cell.selected::before{
+  content:'';position:absolute;inset:0;border:1.5px dashed var(--gold);border-radius:8px;
+}
+
+/* ===== Day detail strip ===== */
+.day-strip{
+  margin-top:10px;padding:10px 12px;background:var(--paper-deep);border-radius:10px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font-size:12px;color:var(--ink-soft);
+}
+.day-strip strong{color:var(--ink);font-family:var(--serif);font-size:13px;}
+.day-strip .clear-btn{font-size:11px;text-decoration:underline;color:var(--stamp);flex-shrink:0;}
+
+/* ===== Banner list ===== */
+.banners{margin-top:22px;display:flex;flex-direction:column;gap:16px;}
+
+.banner{
+  background:rgba(255,255,255,0.55);
+  border:1px solid var(--paper-line);
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.banner-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 12px;cursor:pointer;
+  border-bottom:1px solid transparent;
+}
+.banner.expanded .banner-head{border-bottom-color:var(--paper-line);}
+.banner-head-left{display:flex;align-items:center;gap:10px;min-width:0;}
+.banner-stamp{
+  width:36px;height:36px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--serif);font-weight:700;font-size:15px;color:#fff;
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0.4);
+}
+.banner-meta{min-width:0;}
+.banner-name{font-family:var(--serif);font-size:16px;font-weight:600;color:var(--ink);}
+.banner-sub{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+.banner-head-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.banner-today-check{
+  width:20px;height:20px;border-radius:50%;border:1.5px solid var(--paper-line);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;
+}
+.banner-today-check.done{background:var(--stamp);border-color:var(--stamp);color:#fff;}
+.chevron{font-size:12px;color:var(--ink-soft);transition:transform 0.2s;}
+.banner.expanded .chevron{transform:rotate(180deg);}
+
+.banner-body{display:none;}
+.banner.expanded .banner-body{display:block;}
+
+.composer{padding:12px 16px;border-bottom:1px solid var(--paper-line);background:rgba(255,255,255,0.3);}
+.composer textarea{
+  width:100%;min-height:54px;resize:none;border:none;outline:none;background:transparent;
+  font-family:var(--serif);font-size:14.5px;line-height:1.6;color:var(--ink);
+}
+.composer textarea::placeholder{color:var(--ink-soft);opacity:0.55;font-family:var(--sans);font-size:13px;}
+.composer-attach-preview{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0;}
+.attach-chip{
+  display:flex;align-items:center;gap:6px;background:var(--paper-deep);border-radius:8px;
+  padding:5px 9px;font-size:11px;color:var(--ink-soft);max-width:200px;
+}
+.attach-chip img{width:18px;height:18px;border-radius:4px;object-fit:cover;}
+.attach-chip .x{color:var(--stamp);font-weight:700;cursor:pointer;flex-shrink:0;}
+.composer-row{display:flex;align-items:center;justify-content:space-between;margin-top:8px;}
+.composer-tools{display:flex;gap:4px;}
+.tool-btn{
+  width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  color:var(--ink-soft);font-size:15px;
+}
+.tool-btn:hover{background:var(--paper-deep);color:var(--ink);}
+.send-btn{
+  font-family:var(--sans);font-size:12.5px;font-weight:600;color:#fff;background:var(--ink);
+  padding:7px 16px;border-radius:8px;
+}
+.send-btn:disabled{opacity:0.35;}
+.link-input-row{display:none;gap:6px;margin-top:8px;}
+.link-input-row.show{display:flex;}
+.link-input-row input{
+  flex:1;border:1px solid var(--paper-line);background:#fff;border-radius:7px;padding:7px 10px;
+  font-size:12.5px;color:var(--ink);outline:none;
+}
+.link-input-row button{font-size:12px;background:var(--ink);color:#fff;padding:7px 12px;border-radius:7px;}
+
+.feed{padding:6px 16px 16px;display:flex;flex-direction:column;gap:14px;max-height:520px;overflow-y:auto;}
+.feed-empty{
+  padding:30px 10px;text-align:center;color:var(--ink-soft);font-size:13px;
+  font-family:var(--serif);
+}
+.entry{display:flex;gap:10px;}
+.entry-rail{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:20px;}
+.entry-dot{width:7px;height:7px;border-radius:50%;background:var(--paper-line);margin-top:6px;flex-shrink:0;}
+.entry-line{flex:1;width:1px;background:var(--paper-line);margin-top:4px;}
+.entry-body{flex:1;min-width:0;padding-bottom:2px;}
+.entry-time{font-size:10.5px;color:var(--ink-soft);margin-bottom:3px;}
+.entry-text{
+  font-family:var(--serif);font-size:14.5px;line-height:1.7;color:var(--ink);
+  white-space:pre-wrap;word-break:break-word;
+}
+.entry-media{margin-top:8px;display:flex;flex-direction:column;gap:8px;}
+.entry-img{max-width:100%;border-radius:8px;border:1px solid var(--paper-line);display:block;}
+.entry-file,.entry-link{
+  display:flex;align-items:center;gap:8px;background:var(--paper-deep);border-radius:8px;
+  padding:8px 10px;font-size:12.5px;color:var(--ink);text-decoration:none;max-width:100%;
+}
+.entry-file .ico,.entry-link .ico{flex-shrink:0;font-size:14px;}
+.entry-file span,.entry-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.entry-del{
+  font-size:10.5px;color:var(--ink-soft);opacity:0;transition:opacity 0.15s;margin-left:6px;
+}
+.entry:hover .entry-del{opacity:0.7;}
+.entry-del:hover{color:var(--stamp);opacity:1;}
+
+/* ===== Sync panel ===== */
+.sync-overlay{
+  position:fixed;inset:0;background:rgba(31,42,36,0.45);z-index:90;
+  display:none;align-items:flex-end;justify-content:center;
+}
+.sync-overlay.show{display:flex;}
+.sync-sheet{
+  background:var(--paper);width:100%;max-width:680px;border-radius:18px 18px 0 0;
+  padding:20px 20px 28px;max-height:80vh;overflow-y:auto;
+}
+.sync-sheet h3{font-family:var(--serif);font-size:17px;margin:0 0 4px;}
+.sync-sheet p{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 14px;}
+.sync-code-display{
+  font-family:var(--serif);font-size:26px;letter-spacing:0.08em;text-align:center;
+  background:var(--paper-deep);border-radius:12px;padding:16px;margin-bottom:14px;color:var(--ink);
+  font-weight:700;
+}
+.sync-input-group{display:flex;gap:8px;margin-bottom:10px;}
+.sync-input-group input{
+  flex:1;border:1px solid var(--paper-line);background:#fff;border-radius:9px;padding:10px 12px;
+  font-size:14px;letter-spacing:0.05em;outline:none;
+}
+.sync-btn-primary{
+  background:var(--ink);color:#fff;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;
+}
+.sync-btn-secondary{
+  width:100%;text-align:center;padding:10px;border-radius:9px;border:1px solid var(--paper-line);
+  font-size:13px;color:var(--ink);margin-top:4px;
+}
+.sync-status-msg{font-size:12px;margin-top:8px;min-height:16px;}
+.sync-status-msg.err{color:var(--stamp);}
+.sync-status-msg.ok{color:#3F6B45;}
+.sync-close{
+  position:absolute;top:14px;right:16px;font-size:20px;color:var(--ink-soft);
+}
+.sync-sheet{position:relative;}
+
+/* fab */
+.fab-sync{
+  position:fixed;bottom:20px;right:20px;z-index:40;
+  width:46px;height:46px;border-radius:50%;background:var(--ink);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:var(--shadow);
+}
+
+@media (max-width:420px){
+  .brand-title{font-size:19px;}
+  .feed{max-height:440px;}
+}
 </style>
 </head>
 <body>
+<div id="app">
 
-<div id="root">
-  <div id="fallback-msg">
-    <p style="font-weight:600; margin-bottom:8px;">화면을 불러오는 중입니다…</p>
-    <p style="opacity:.6; font-size:14px;">
-      잠시 후에도 이 화면이 그대로라면 자바스크립트 로딩에 문제가 있는 것입니다.
-      페이지를 새로고침해 주세요.
-    </p>
+  <header class="app-header">
+    <div class="header-row">
+      <div class="brand">
+        <span class="brand-eyebrow">Daily Ledger</span>
+        <span class="brand-title">자기계발 장부</span>
+      </div>
+      <button class="sync-pill" id="syncPillBtn">
+        <span class="sync-dot off" id="syncDot"></span>
+        <span id="syncLabel">연결 안 됨</span>
+      </button>
+    </div>
+
+    <div class="cal-wrap">
+      <div class="cal-top">
+        <span class="cal-month" id="calMonthLabel">2026년 6월</span>
+        <div class="cal-nav">
+          <button id="calPrev">‹</button>
+          <button id="calNext">›</button>
+        </div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+
+    <div class="day-strip" id="dayStrip" style="display:none;">
+      <span><strong id="dayStripDate"></strong> · <span id="dayStripCount"></span>/5 배너 기록</span>
+      <span class="clear-btn" id="dayStripClear">오늘 보기</span>
+    </div>
+  </header>
+
+  <main class="banners" id="banners"></main>
+
+</div>
+
+<button class="fab-sync" id="fabSync" title="기기 동기화">⇄</button>
+
+<div class="sync-overlay" id="syncOverlay">
+  <div class="sync-sheet">
+    <button class="sync-close" id="syncCloseBtn">×</button>
+    <h3>기기 동기화</h3>
+    <p>이 장부를 다른 기기(휴대폰 ↔ PC)와 연결해서 같은 기록을 보고 쓸 수 있습니다. 코드를 아는 사람은 누구나 접근할 수 있으니 비밀번호처럼 보관하세요.</p>
+
+    <div id="syncMyCodeBlock">
+      <p style="margin-bottom:6px;font-weight:600;color:var(--ink);">이 기기의 연결 코드</p>
+      <div class="sync-code-display" id="myCodeDisplay">— — — —</div>
+    </div>
+
+    <p style="margin-top:18px;margin-bottom:6px;font-weight:600;color:var(--ink);">다른 기기 코드로 연결하기</p>
+    <div class="sync-input-group">
+      <input id="joinCodeInput" placeholder="XXXX-XXXX" maxlength="9" />
+      <button class="sync-btn-primary" id="joinCodeBtn">연결</button>
+    </div>
+    <div class="sync-status-msg" id="syncStatusMsg"></div>
   </div>
 </div>
 
-<script>
-window.addEventListener("error", function (e) {
-  var root = document.getElementById("root");
-  if (root && !root.dataset.rendered) {
-    root.innerHTML =
-      '<div id="fallback-msg">' +
-      '<p style="font-weight:600;margin-bottom:8px;">화면을 불러오는 중 오류가 발생했습니다</p>' +
-      '<p style="opacity:.6;font-size:14px;word-break:break-all;">' + (e.message || "알 수 없는 오류") + '</p>' +
-      '</div>';
-  }
-});
-</script>
-
-<script src="react.production.min.js"></script>
-<script src="react-dom.production.min.js"></script>
-
-<script type="module">
-import { initializeApp } from "./firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "./firebase-auth.js";
-import {
-  getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp,
-} from "./firebase-firestore.js";
-
-// ── Firebase 프로젝트 설정 ──────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyAI6c2yfcT3WtNp2DMiezrFrBHK2ikGLys",
-  authDomain: "reflection-card-p.firebaseapp.com",
-  projectId: "reflection-card-p",
-  storageBucket: "reflection-card-p.firebasestorage.app",
-  messagingSenderId: "437835931255",
-  appId: "1:437835931255:web:0ad2ae1dd2c77a2ec43072",
-};
-
-const fbApp = initializeApp(firebaseConfig);
-const auth = getAuth(fbApp);
-const db = getFirestore(fbApp);
-
-// ── 동기화 그룹 코드 ─────────────────────────────────────
-// 기기가 속한 "동기화 그룹"의 ID. 처음에는 익명 인증 uid를 그대로 그룹 ID로 쓴다.
-// 사람이 다른 기기에 옮겨 적기 쉬운 짧은 코드로 변환해서 보여준다.
-const SYNC_GROUP_KEY = "reflection:syncGroupId";
-
-function uidToCode(uid) {
-  // uid(28자 영숫자)를 사람이 옮기기 쉬운 8자리 대문자 코드로 축약한다.
-  // 같은 uid는 항상 같은 코드가 나오도록 간단한 해시를 사용한다.
-  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-  for (let i = 0; i < uid.length; i++) {
-    const ch = uid.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = (h1 ^ (h1 >>> 16)) >>> 0;
-  h2 = (h2 ^ (h2 >>> 16)) >>> 0;
-  const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 0/O, 1/I 등 혼동 글자 제외
-  let code = "";
-  let n1 = h1, n2 = h2;
-  for (let i = 0; i < 4; i++) { code += ALPHABET[n1 % ALPHABET.length]; n1 = Math.floor(n1 / ALPHABET.length); }
-  for (let i = 0; i < 4; i++) { code += ALPHABET[n2 % ALPHABET.length]; n2 = Math.floor(n2 / ALPHABET.length); }
-  return code.slice(0, 4) + "-" + code.slice(4, 8);
-}
-
-// 코드 -> groupId 역매핑은 Firestore의 별도 컬렉션(codeMap)에 저장해 둔다.
-// (해시는 단방향이라 코드만 보고 uid를 복원할 수 없기 때문)
-async function resolveCodeToGroup(code) {
-  const ref = doc(db, "codeMap", code.toUpperCase());
-  const snap = await getDoc(ref);
-  return snap.exists() ? snap.data().groupId : null;
-}
-
-async function registerCode(code, groupId) {
-  const ref = doc(db, "codeMap", code.toUpperCase());
-  await setDoc(ref, { groupId, createdAt: serverTimestamp() });
-}
-
-// ── 앱 부트스트랩 ────────────────────────────────────────
-window.__rcFirebaseReady = new Promise((resolve, reject) => {
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      try { await signInAnonymously(auth); } catch (e) { reject(e); }
-      return;
-    }
-    const savedGroupId = localStorage.getItem(SYNC_GROUP_KEY);
-    const groupId = savedGroupId || user.uid;
-    if (!savedGroupId) {
-      localStorage.setItem(SYNC_GROUP_KEY, groupId);
-      const code = uidToCode(user.uid);
-      try { await registerCode(code, groupId); } catch (e) { /* 코드 등록 실패는 치명적이지 않음 */ }
-    }
-    resolve({ db, doc, setDoc, onSnapshot, serverTimestamp, groupId, uid: user.uid, uidToCode, resolveCodeToGroup, registerCode, SYNC_GROUP_KEY });
-  });
-});
-</script>
-
-<script>
-(function () {
-  var h = React.createElement;
-  var useState = React.useState;
-  var useEffect = React.useEffect;
-  var useCallback = React.useCallback;
-  var useRef = React.useRef;
-
-  // ── Helpers ──────────────────────────────────────────────
-  function relTime(ts) {
-    var diff = Date.now() - ts;
-    var m = Math.floor(diff / 60000);
-    if (m < 1) return "방금";
-    if (m < 60) return m + "분 전";
-    var hh = Math.floor(m / 60);
-    if (hh < 24) return hh + "시간 전";
-    var d = Math.floor(hh / 24);
-    if (d < 30) return d + "일 전";
-    var mo = Math.floor(d / 30);
-    if (mo < 12) return mo + "개월 전";
-    return Math.floor(mo / 12) + "년 전";
-  }
-  function uid() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  }
-
-  function QuoteIcon(props) {
-    var size = (props && props.size) || 16;
-    var style = props && props.style;
-    return h("svg", {
-      width: size, height: size, viewBox: "0 0 24 24", fill: "none",
-      stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round",
-      strokeLinejoin: "round", style: style
-    },
-      h("path", { d: "M3 21c3 0 7-1 7-8V5c0-1.25-.756-2-2-2H4c-1.25 0-2 .75-2 2v4c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" }),
-      h("path", { d: "M15 21c3 0 7-1 7-8V5c0-1.25-.757-2-2-2h-4c-1.25 0-2 .75-2 2v4c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" })
-    );
-  }
-
-  function Icon(props) {
-    var name = props.name, size = props.size || 20;
-    var common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none",
-      stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
-    if (name === "plus") return h("svg", common, h("path", { d: "M12 5v14M5 12h14" }));
-    if (name === "back") return h("svg", common, h("path", { d: "M19 12H5M12 19l-7-7 7-7" }));
-    if (name === "trash") return h("svg", common, h("path", { d: "M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" }));
-    if (name === "cloud") return h("svg", common, h("path", { d: "M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9z" }));
-    if (name === "link") return h("svg", common, h("path", { d: "M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 1 0-7.07-7.07l-1.5 1.5M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 1 0 7.07 7.07l1.5-1.5" }));
-    return null;
-  }
-
-  function App() {
-    var fbState = useState(null); var fb = fbState[0], setFb = fbState[1];
-    var fbErrorState = useState(null); var fbError = fbErrorState[0], setFbError = fbErrorState[1];
-    var cardsState = useState({}); var cardsMap = cardsState[0], setCardsMap = cardsState[1];
-    var loadingState = useState(true); var loading = loadingState[0], setLoading = loadingState[1];
-    var openState = useState(null); var open = openState[0], setOpen = openState[1];
-    var composingState = useState(false); var composing = composingState[0], setComposing = composingState[1];
-    var newPhraseState = useState(""); var newPhrase = newPhraseState[0], setNewPhrase = newPhraseState[1];
-    var syncPanelState = useState(false); var syncPanelOpen = syncPanelState[0], setSyncPanelOpen = syncPanelState[1];
-    var joinCodeState = useState(""); var joinCode = joinCodeState[0], setJoinCode = joinCodeState[1];
-    var joinErrorState = useState(""); var joinError = joinErrorState[0], setJoinError = joinErrorState[1];
-    var joiningState = useState(false); var joining = joiningState[0], setJoining = joiningState[1];
-
-    var unsubRef = useRef(null);
-
-    // Firebase 준비 — 모듈 스크립트가 비동기로 늦게 실행될 수 있으므로
-    // window.__rcFirebaseReady가 생성될 때까지 안전하게 기다린다.
-    useEffect(function () {
-      var cancelled = false;
-      function waitForReady() {
-        if (cancelled) return;
-        if (window.__rcFirebaseReady) {
-          window.__rcFirebaseReady.then(function (result) {
-            if (!cancelled) setFb(result);
-          }).catch(function (err) {
-            if (cancelled) return;
-            setFbError(err && err.message ? err.message : "클라우드 연결에 실패했습니다.");
-            setLoading(false);
-          });
-        } else {
-          setTimeout(waitForReady, 30);
-        }
-      }
-      waitForReady();
-      return function () { cancelled = true; };
-    }, []);
-
-    // groupId 문서 구독 (실시간 동기화)
-    useEffect(function () {
-      if (!fb) return;
-      subscribeToGroup(fb.groupId);
-      return function () { if (unsubRef.current) unsubRef.current(); };
-    }, [fb]);
-
-    function subscribeToGroup(groupId) {
-      if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; }
-      var ref = fb.doc(fb.db, "syncGroups", groupId);
-      setLoading(true);
-      unsubRef.current = fb.onSnapshot(ref, function (snap) {
-        setLoading(false);
-        if (snap.exists()) {
-          var data = snap.data();
-          setCardsMap(data.cards || {});
-        } else {
-          setCardsMap({});
-        }
-      }, function (err) {
-        setLoading(false);
-        setFbError("클라우드 동기화 중 오류: " + (err && err.message ? err.message : "알 수 없는 오류"));
-      });
-    }
-
-    function persistCardsMap(nextMap) {
-      setCardsMap(nextMap);
-      if (!fb) return;
-      var ref = fb.doc(fb.db, "syncGroups", fb.groupId);
-      fb.setDoc(ref, { cards: nextMap, updatedAt: fb.serverTimestamp() }, { merge: false }).catch(function (err) {
-        setFbError("저장 중 오류가 발생했습니다: " + (err && err.message ? err.message : ""));
-      });
-    }
-
-    function touch(id) {
-      var c = cardsMap[id];
-      if (!c) return;
-      var next = Object.assign({}, cardsMap);
-      next[id] = Object.assign({}, c, { touchedAt: Date.now() });
-      persistCardsMap(next);
-    }
-    function addCard() {
-      var phrase = newPhrase.trim();
-      if (!phrase) return;
-      var now = Date.now();
-      var id = uid();
-      var card = { id: id, phrase: phrase, source: "", insights: "", createdAt: now, touchedAt: now };
-      var next = Object.assign({}, cardsMap);
-      next[id] = card;
-      persistCardsMap(next);
-      setNewPhrase(""); setComposing(false); setOpen(id);
-    }
-    function updateField(id, field, value) {
-      var c = cardsMap[id];
-      if (!c) return;
-      var patch = {}; patch[field] = value; patch.touchedAt = Date.now();
-      var next = Object.assign({}, cardsMap);
-      next[id] = Object.assign({}, c, patch);
-      persistCardsMap(next);
-    }
-    function removeCard(id) {
-      var next = Object.assign({}, cardsMap);
-      delete next[id];
-      persistCardsMap(next);
-      setOpen(null);
-    }
-
-    async function handleJoin() {
-      var code = joinCode.trim().toUpperCase();
-      if (!code) return;
-      setJoining(true); setJoinError("");
-      try {
-        var groupId = await fb.resolveCodeToGroup(code);
-        if (!groupId) {
-          setJoinError("코드를 찾을 수 없습니다. 다시 확인해 주세요.");
-          setJoining(false);
-          return;
-        }
-        localStorage.setItem(fb.SYNC_GROUP_KEY, groupId);
-        setFb(Object.assign({}, fb, { groupId: groupId }));
-        subscribeToGroup(groupId);
-        setSyncPanelOpen(false);
-        setJoinCode("");
-      } catch (e) {
-        setJoinError("연결 중 오류가 발생했습니다.");
-      }
-      setJoining(false);
-    }
-
-    var cardsArr = Object.keys(cardsMap).map(function (k) { return cardsMap[k]; });
-    var sorted = cardsArr.slice().sort(function (a, b) { return b.touchedAt - a.touchedAt; });
-    var current = open ? cardsMap[open] : null;
-
-    var children = [];
-
-    children.push(h("header", { style: S.header, key: "header" },
-      h("div", null,
-        h("div", { style: S.kicker }, "매일 마주하는 질문들"),
-        h("h1", { style: S.title }, "성찰의 카드")
-      ),
-      h("div", { style: { display: "flex", gap: 8 } },
-        h("button", { style: S.iconCircleBtn, onClick: function () { setSyncPanelOpen(true); }, "aria-label": "기기 동기화" },
-          h(Icon, { name: "cloud", size: 17 })
-        ),
-        h("button", { style: S.addBtn, onClick: function () { setComposing(true); }, "aria-label": "새 카드 추가" },
-          h(Icon, { name: "plus", size: 18 })
-        )
-      )
-    ));
-
-    if (fbError) {
-      children.push(h("div", { style: S.errorBanner, key: "error" }, fbError));
-    }
-
-    if (loading) {
-      children.push(h("div", { style: S.empty, key: "loading" },
-        h("span", { className: "rc-spinner" }),
-        h("p", { style: { margin: "14px 0 0", opacity: 0.6, fontSize: 14, fontFamily: "var(--sans)" } }, "클라우드에서 불러오는 중…")
-      ));
-    } else if (sorted.length === 0) {
-      children.push(h("div", { style: S.empty, key: "empty" },
-        h(QuoteIcon, { size: 28, style: { opacity: 0.4 } }),
-        h("p", { style: { margin: "14px 0 4px", fontWeight: 700 } }, "아직 카드가 없습니다"),
-        h("p", { style: { margin: 0, opacity: 0.6, fontSize: 14, fontFamily: "var(--sans)" } },
-          "오른쪽 위 + 를 눌러 깊이 생각하고 싶은", h("br"), "문장을 하나 적어보세요.")
-      ));
-    } else {
-      children.push(h("div", { style: S.grid, key: "grid" },
-        sorted.map(function (c) {
-          return h("button", {
-            key: c.id, className: "rc-card", style: S.card,
-            onClick: function () { touch(c.id); setOpen(c.id); }
-          },
-            h(QuoteIcon, { size: 16, style: S.cardQuote }),
-            h("div", { style: S.cardPhrase }, c.phrase),
-            h("div", { style: S.cardMeta },
-              c.source ? h("span", { style: S.cardSource }, c.source) : h("span"),
-              h("span", { style: S.cardTime }, relTime(c.touchedAt))
-            )
-          );
-        })
-      ));
-    }
-
-    if (composing) {
-      children.push(h("div", { style: S.overlay, key: "overlay", onClick: function () { setComposing(false); } },
-        h("div", { style: S.composer, onClick: function (e) { e.stopPropagation(); } },
-          h("div", { style: S.composerLabel }, "마주하고 싶은 문장"),
-          h("textarea", {
-            autoFocus: true, value: newPhrase,
-            onChange: function (e) { setNewPhrase(e.target.value); },
-            placeholder: "예) 나는 오늘 무엇을 더 나아지게 했는가?",
-            style: S.composerInput,
-            onKeyDown: function (e) { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) addCard(); }
-          }),
-          h("div", { style: S.composerActions },
-            h("button", { style: S.ghostBtn, onClick: function () { setComposing(false); } }, "취소"),
-            h("button", { style: S.primaryBtn, onClick: addCard }, "카드 만들기")
-          )
-        )
-      ));
-    }
-
-    if (syncPanelOpen) {
-      var myCode = fb ? fb.uidToCode(fb.uid) : "";
-      children.push(h("div", { style: S.overlay, key: "sync-overlay", onClick: function () { setSyncPanelOpen(false); } },
-        h("div", { style: S.composer, onClick: function (e) { e.stopPropagation(); } },
-          h("div", { style: S.composerLabel }, "이 기기의 동기화 코드"),
-          h("div", { style: S.syncCodeBox }, myCode || "불러오는 중…"),
-          h("p", { style: S.syncHint }, "다른 기기에서 아래 입력란에 이 코드를 입력하면 같은 카드 목록을 보게 됩니다."),
-          h("div", { style: S.fieldLabel }, "다른 기기의 코드로 연결하기"),
-          h("div", { style: { display: "flex", gap: 8 } },
-            h("input", {
-              value: joinCode,
-              onChange: function (e) { setJoinCode(e.target.value); setJoinError(""); },
-              placeholder: "XXXX-XXXX",
-              style: Object.assign({}, S.sourceInput, { flex: 1 }),
-              onKeyDown: function (e) { if (e.key === "Enter") handleJoin(); }
-            }),
-            h("button", {
-              style: Object.assign({}, S.primaryBtn, { opacity: joining ? 0.6 : 1 }),
-              onClick: handleJoin, disabled: joining
-            }, joining ? "연결 중…" : "연결")
-          ),
-          joinError ? h("p", { style: S.syncError }, joinError) : null,
-          h("div", { style: S.composerActions },
-            h("button", { style: S.ghostBtn, onClick: function () { setSyncPanelOpen(false); } }, "닫기")
-          )
-        )
-      ));
-    }
-
-    if (current) {
-      children.push(h("div", { style: S.detailWrap, key: "detail" },
-        h("div", { style: S.detailBar },
-          h("button", { style: S.iconBtn, onClick: function () { setOpen(null); }, "aria-label": "뒤로" },
-            h(Icon, { name: "back", size: 20 })),
-          h("button", { style: S.iconBtn, onClick: function () { removeCard(current.id); }, "aria-label": "카드 삭제" },
-            h(Icon, { name: "trash", size: 18 }))
-        ),
-        h("div", { style: S.detailBody },
-          h("div", { style: { color: "var(--accent)", marginBottom: 12 } }, h(QuoteIcon, { size: 22 })),
-          h("textarea", {
-            value: current.phrase,
-            onChange: function (e) { updateField(current.id, "phrase", e.target.value); },
-            style: S.detailPhrase, rows: 2
-          }),
-          h("div", { style: S.fieldLabel }, "출처 · 어디에서 왔는가"),
-          h("input", {
-            value: current.source,
-            onChange: function (e) { updateField(current.id, "source", e.target.value); },
-            placeholder: "책, 사람, 경험…", style: S.sourceInput
-          }),
-          h("div", { style: S.fieldLabel }, "인사이트 · 생각하며 얻은 것"),
-          h("textarea", {
-            value: current.insights,
-            onChange: function (e) { updateField(current.id, "insights", e.target.value); },
-            placeholder: "이 문장을 곱씹으며 떠오른 생각을 자유롭게 적어보세요.",
-            style: S.insightInput
-          }),
-          h("div", { style: S.detailFooter }, "처음 만든 날: " + new Date(current.createdAt).toLocaleDateString("ko-KR"))
-        )
-      ));
-    }
-
-    return h("div", { style: S.root }, children);
-  }
-
-  var S = {
-    root: { maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px", minHeight: "100vh" },
-    header: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28 },
-    kicker: { fontFamily: "var(--sans)", fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 6 },
-    title: { margin: 0, fontSize: 30, fontWeight: 700, letterSpacing: "-0.01em" },
-    addBtn: { width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--ink)", background: "var(--ink)", color: "var(--paper)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
-    iconCircleBtn: { width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--line)", background: "var(--card)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
-    errorBanner: { background: "#fdeeea", border: "1px solid #f0c4b8", color: "#9c4221", borderRadius: 10, padding: "10px 14px", fontFamily: "var(--sans)", fontSize: 13, marginBottom: 18 },
-    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 },
-    card: { textAlign: "left", background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, padding: "18px 18px 14px", cursor: "pointer", display: "flex", flexDirection: "column", minHeight: 130, color: "inherit", boxShadow: "0 1px 2px rgba(40,30,10,0.04)" },
-    cardQuote: { color: "var(--accent)", opacity: 0.55, marginBottom: 10 },
-    cardPhrase: { fontSize: 17, lineHeight: 1.45, fontWeight: 700, flex: 1, letterSpacing: "-0.005em" },
-    cardMeta: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 14, fontFamily: "var(--sans)", fontSize: 11.5 },
-    cardSource: { color: "var(--accent)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 },
-    cardTime: { opacity: 0.45, flexShrink: 0 },
-    empty: { textAlign: "center", padding: "80px 20px" },
-    overlay: { position: "fixed", inset: 0, background: "rgba(29,27,22,0.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 },
-    composer: { background: "var(--paper)", borderRadius: 18, padding: 22, width: "100%", maxWidth: 440, boxShadow: "0 20px 50px rgba(0,0,0,0.2)" },
-    composerLabel: { fontFamily: "var(--sans)", fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 },
-    composerInput: { width: "100%", minHeight: 80, border: "1px solid var(--line)", borderRadius: 10, padding: 12, fontSize: 18, fontFamily: "var(--serif)", background: "var(--card)", resize: "vertical", color: "var(--ink)" },
-    composerActions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 },
-    ghostBtn: { border: "none", background: "none", padding: "10px 16px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 14, color: "var(--ink)", borderRadius: 8 },
-    primaryBtn: { border: "none", background: "var(--ink)", color: "var(--paper)", padding: "10px 18px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 14, fontWeight: 600, borderRadius: 8 },
-    detailWrap: { position: "fixed", inset: 0, background: "var(--paper)", zIndex: 60, overflowY: "auto" },
-    detailBar: { display: "flex", justifyContent: "space-between", padding: "16px 18px", position: "sticky", top: 0, background: "var(--paper)", borderBottom: "1px solid var(--line)" },
-    iconBtn: { border: "none", background: "none", cursor: "pointer", color: "var(--ink)", padding: 6, display: "flex" },
-    detailBody: { maxWidth: 640, margin: "0 auto", padding: "26px 22px 80px" },
-    detailPhrase: { width: "100%", border: "none", background: "none", fontSize: 26, lineHeight: 1.4, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink)", resize: "none", letterSpacing: "-0.01em", outline: "none" },
-    fieldLabel: { fontFamily: "var(--sans)", fontSize: 11.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--accent)", margin: "30px 0 8px" },
-    sourceInput: { width: "100%", border: "1px solid var(--line)", borderRadius: 8, background: "var(--card)", fontSize: 16, fontFamily: "var(--serif)", color: "var(--ink)", padding: "10px 12px", boxSizing: "border-box", outline: "none" },
-    insightInput: { width: "100%", minHeight: 220, border: "1px solid var(--line)", borderRadius: 12, background: "var(--card)", fontSize: 17, lineHeight: 1.6, fontFamily: "var(--serif)", color: "var(--ink)", padding: 16, resize: "vertical", outline: "none" },
-    detailFooter: { marginTop: 28, fontFamily: "var(--sans)", fontSize: 12, opacity: 0.45 },
-    syncCodeBox: { fontFamily: "var(--sans)", fontSize: 28, fontWeight: 700, letterSpacing: "0.08em", textAlign: "center", background: "var(--card)", border: "1px dashed var(--accent)", borderRadius: 10, padding: "16px 0", color: "var(--accent)" },
-    syncHint: { fontFamily: "var(--sans)", fontSize: 13, opacity: 0.65, margin: "12px 0 22px", lineHeight: 1.5 },
-    syncError: { fontFamily: "var(--sans)", fontSize: 13, color: "#c0392b", marginTop: 8, marginBottom: 0 }
-  };
-
-  var rootEl = document.getElementById("root");
-  rootEl.dataset.rendered = "1";
-  ReactDOM.createRoot(rootEl).render(h(App));
-})();
-</script>
-
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("service-worker.js").catch(function (err) {
-        console.warn("서비스 워커 등록 실패 (file://로 열었다면 정상입니다):", err);
-      });
-    });
-  }
-</script>
+<script src="app.js"></script>
 </body>
 </html>
+
