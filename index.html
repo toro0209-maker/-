@@ -14,6 +14,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="성찰의 카드" />
 
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet" />
+
 <style>
   :root {
     --ink: #1d1b16;
@@ -22,7 +26,7 @@
     --line: #e2dccd;
     --card: #fffdf8;
     --serif: "Gowun Batang", "Iowan Old Style", Georgia, serif;
-    --sans: -apple-system, "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+    --sans: "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--paper); }
@@ -41,11 +45,16 @@
   }
   @media (prefers-reduced-motion: reduce) { .rc-card { transition: none; } }
 
-  /* 폴백: 자바스크립트가 아예 실행되지 못한 극단적 상황에서도
-     완전한 백지 화면 대신 안내문이 보이도록 */
   #fallback-msg {
     max-width: 480px; margin: 80px auto; padding: 0 20px;
     text-align: center; font-family: var(--sans); color: var(--ink);
+  }
+
+  @keyframes rc-spin { to { transform: rotate(360deg); } }
+  .rc-spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid rgba(154,107,63,0.25); border-top-color: var(--accent);
+    animation: rc-spin .7s linear infinite; display: inline-block;
   }
 </style>
 </head>
@@ -61,13 +70,7 @@
   </div>
 </div>
 
-<!-- React/ReactDOM을 로컬 파일로 직접 포함 (외부 CDN 차단 환경에서도 항상 동작) -->
-<script src="react.production.min.js"></script>
-<script src="react-dom.production.min.js"></script>
-
 <script>
-// 자바스크립트 실행 중 어떤 에러가 나도 화면이 완전 백지가 되지 않도록
-// 전역에서 잡아 사용자에게 보여준다.
 window.addEventListener("error", function (e) {
   var root = document.getElementById("root");
   if (root && !root.dataset.rendered) {
@@ -80,26 +83,93 @@ window.addEventListener("error", function (e) {
 });
 </script>
 
+<script src="react.production.min.js"></script>
+<script src="react-dom.production.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "./firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "./firebase-auth.js";
+import {
+  getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp,
+} from "./firebase-firestore.js";
+
+// ── Firebase 프로젝트 설정 ──────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyAI6c2yfcT3WtNp2DMiezrFrBHK2ikGLys",
+  authDomain: "reflection-card-p.firebaseapp.com",
+  projectId: "reflection-card-p",
+  storageBucket: "reflection-card-p.firebasestorage.app",
+  messagingSenderId: "437835931255",
+  appId: "1:437835931255:web:0ad2ae1dd2c77a2ec43072",
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+
+// ── 동기화 그룹 코드 ─────────────────────────────────────
+// 기기가 속한 "동기화 그룹"의 ID. 처음에는 익명 인증 uid를 그대로 그룹 ID로 쓴다.
+// 사람이 다른 기기에 옮겨 적기 쉬운 짧은 코드로 변환해서 보여준다.
+const SYNC_GROUP_KEY = "reflection:syncGroupId";
+
+function uidToCode(uid) {
+  // uid(28자 영숫자)를 사람이 옮기기 쉬운 8자리 대문자 코드로 축약한다.
+  // 같은 uid는 항상 같은 코드가 나오도록 간단한 해시를 사용한다.
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < uid.length; i++) {
+    const ch = uid.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = (h1 ^ (h1 >>> 16)) >>> 0;
+  h2 = (h2 ^ (h2 >>> 16)) >>> 0;
+  const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 0/O, 1/I 등 혼동 글자 제외
+  let code = "";
+  let n1 = h1, n2 = h2;
+  for (let i = 0; i < 4; i++) { code += ALPHABET[n1 % ALPHABET.length]; n1 = Math.floor(n1 / ALPHABET.length); }
+  for (let i = 0; i < 4; i++) { code += ALPHABET[n2 % ALPHABET.length]; n2 = Math.floor(n2 / ALPHABET.length); }
+  return code.slice(0, 4) + "-" + code.slice(4, 8);
+}
+
+// 코드 -> groupId 역매핑은 Firestore의 별도 컬렉션(codeMap)에 저장해 둔다.
+// (해시는 단방향이라 코드만 보고 uid를 복원할 수 없기 때문)
+async function resolveCodeToGroup(code) {
+  const ref = doc(db, "codeMap", code.toUpperCase());
+  const snap = await getDoc(ref);
+  return snap.exists() ? snap.data().groupId : null;
+}
+
+async function registerCode(code, groupId) {
+  const ref = doc(db, "codeMap", code.toUpperCase());
+  await setDoc(ref, { groupId, createdAt: serverTimestamp() });
+}
+
+// ── 앱 부트스트랩 ────────────────────────────────────────
+window.__rcFirebaseReady = new Promise((resolve, reject) => {
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      try { await signInAnonymously(auth); } catch (e) { reject(e); }
+      return;
+    }
+    const savedGroupId = localStorage.getItem(SYNC_GROUP_KEY);
+    const groupId = savedGroupId || user.uid;
+    if (!savedGroupId) {
+      localStorage.setItem(SYNC_GROUP_KEY, groupId);
+      const code = uidToCode(user.uid);
+      try { await registerCode(code, groupId); } catch (e) { /* 코드 등록 실패는 치명적이지 않음 */ }
+    }
+    resolve({ db, doc, setDoc, onSnapshot, serverTimestamp, groupId, uid: user.uid, uidToCode, resolveCodeToGroup, registerCode, SYNC_GROUP_KEY });
+  });
+});
+</script>
+
 <script>
 (function () {
   var h = React.createElement;
   var useState = React.useState;
   var useEffect = React.useEffect;
   var useCallback = React.useCallback;
-
-  // ── Storage (localStorage) ──────────────────────────────
-  var STORE_KEY = "reflection:cards";
-  function loadCards() {
-    try {
-      var raw = localStorage.getItem(STORE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return [];
-  }
-  function saveCards(cards) {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(cards)); }
-    catch (e) { console.error("저장에 실패했습니다", e); }
-  }
+  var useRef = React.useRef;
 
   // ── Helpers ──────────────────────────────────────────────
   function relTime(ts) {
@@ -139,42 +209,140 @@ window.addEventListener("error", function (e) {
     if (name === "plus") return h("svg", common, h("path", { d: "M12 5v14M5 12h14" }));
     if (name === "back") return h("svg", common, h("path", { d: "M19 12H5M12 19l-7-7 7-7" }));
     if (name === "trash") return h("svg", common, h("path", { d: "M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" }));
+    if (name === "cloud") return h("svg", common, h("path", { d: "M17.5 19H9a7 7 0 1 1 6.71-9h.79a4.5 4.5 0 1 1 0 9z" }));
+    if (name === "link") return h("svg", common, h("path", { d: "M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 1 0-7.07-7.07l-1.5 1.5M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 1 0 7.07 7.07l1.5-1.5" }));
     return null;
   }
 
   function App() {
-    var cardsState = useState([]); var cards = cardsState[0], setCards = cardsState[1];
+    var fbState = useState(null); var fb = fbState[0], setFb = fbState[1];
+    var fbErrorState = useState(null); var fbError = fbErrorState[0], setFbError = fbErrorState[1];
+    var cardsState = useState({}); var cardsMap = cardsState[0], setCardsMap = cardsState[1];
+    var loadingState = useState(true); var loading = loadingState[0], setLoading = loadingState[1];
     var openState = useState(null); var open = openState[0], setOpen = openState[1];
     var composingState = useState(false); var composing = composingState[0], setComposing = composingState[1];
     var newPhraseState = useState(""); var newPhrase = newPhraseState[0], setNewPhrase = newPhraseState[1];
+    var syncPanelState = useState(false); var syncPanelOpen = syncPanelState[0], setSyncPanelOpen = syncPanelState[1];
+    var joinCodeState = useState(""); var joinCode = joinCodeState[0], setJoinCode = joinCodeState[1];
+    var joinErrorState = useState(""); var joinError = joinErrorState[0], setJoinError = joinErrorState[1];
+    var joiningState = useState(false); var joining = joiningState[0], setJoining = joiningState[1];
 
-    useEffect(function () { setCards(loadCards()); }, []);
+    var unsubRef = useRef(null);
 
-    var persist = useCallback(function (next) { setCards(next); saveCards(next); }, []);
+    // Firebase 준비 — 모듈 스크립트가 비동기로 늦게 실행될 수 있으므로
+    // window.__rcFirebaseReady가 생성될 때까지 안전하게 기다린다.
+    useEffect(function () {
+      var cancelled = false;
+      function waitForReady() {
+        if (cancelled) return;
+        if (window.__rcFirebaseReady) {
+          window.__rcFirebaseReady.then(function (result) {
+            if (!cancelled) setFb(result);
+          }).catch(function (err) {
+            if (cancelled) return;
+            setFbError(err && err.message ? err.message : "클라우드 연결에 실패했습니다.");
+            setLoading(false);
+          });
+        } else {
+          setTimeout(waitForReady, 30);
+        }
+      }
+      waitForReady();
+      return function () { cancelled = true; };
+    }, []);
+
+    // groupId 문서 구독 (실시간 동기화)
+    useEffect(function () {
+      if (!fb) return;
+      subscribeToGroup(fb.groupId);
+      return function () { if (unsubRef.current) unsubRef.current(); };
+    }, [fb]);
+
+    function subscribeToGroup(groupId) {
+      if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; }
+      var ref = fb.doc(fb.db, "syncGroups", groupId);
+      setLoading(true);
+      unsubRef.current = fb.onSnapshot(ref, function (snap) {
+        setLoading(false);
+        if (snap.exists()) {
+          var data = snap.data();
+          setCardsMap(data.cards || {});
+        } else {
+          setCardsMap({});
+        }
+      }, function (err) {
+        setLoading(false);
+        setFbError("클라우드 동기화 중 오류: " + (err && err.message ? err.message : "알 수 없는 오류"));
+      });
+    }
+
+    function persistCardsMap(nextMap) {
+      setCardsMap(nextMap);
+      if (!fb) return;
+      var ref = fb.doc(fb.db, "syncGroups", fb.groupId);
+      fb.setDoc(ref, { cards: nextMap, updatedAt: fb.serverTimestamp() }, { merge: false }).catch(function (err) {
+        setFbError("저장 중 오류가 발생했습니다: " + (err && err.message ? err.message : ""));
+      });
+    }
 
     function touch(id) {
-      persist(cards.map(function (c) { return c.id === id ? Object.assign({}, c, { touchedAt: Date.now() }) : c; }));
+      var c = cardsMap[id];
+      if (!c) return;
+      var next = Object.assign({}, cardsMap);
+      next[id] = Object.assign({}, c, { touchedAt: Date.now() });
+      persistCardsMap(next);
     }
     function addCard() {
       var phrase = newPhrase.trim();
       if (!phrase) return;
       var now = Date.now();
-      var card = { id: uid(), phrase: phrase, source: "", insights: "", createdAt: now, touchedAt: now };
-      persist([card].concat(cards));
-      setNewPhrase(""); setComposing(false); setOpen(card.id);
+      var id = uid();
+      var card = { id: id, phrase: phrase, source: "", insights: "", createdAt: now, touchedAt: now };
+      var next = Object.assign({}, cardsMap);
+      next[id] = card;
+      persistCardsMap(next);
+      setNewPhrase(""); setComposing(false); setOpen(id);
     }
     function updateField(id, field, value) {
+      var c = cardsMap[id];
+      if (!c) return;
       var patch = {}; patch[field] = value; patch.touchedAt = Date.now();
-      persist(cards.map(function (c) { return c.id === id ? Object.assign({}, c, patch) : c; }));
+      var next = Object.assign({}, cardsMap);
+      next[id] = Object.assign({}, c, patch);
+      persistCardsMap(next);
     }
     function removeCard(id) {
-      persist(cards.filter(function (c) { return c.id !== id; }));
+      var next = Object.assign({}, cardsMap);
+      delete next[id];
+      persistCardsMap(next);
       setOpen(null);
     }
 
-    var sorted = cards.slice().sort(function (a, b) { return b.touchedAt - a.touchedAt; });
-    var current = null;
-    for (var i = 0; i < cards.length; i++) { if (cards[i].id === open) { current = cards[i]; break; } }
+    async function handleJoin() {
+      var code = joinCode.trim().toUpperCase();
+      if (!code) return;
+      setJoining(true); setJoinError("");
+      try {
+        var groupId = await fb.resolveCodeToGroup(code);
+        if (!groupId) {
+          setJoinError("코드를 찾을 수 없습니다. 다시 확인해 주세요.");
+          setJoining(false);
+          return;
+        }
+        localStorage.setItem(fb.SYNC_GROUP_KEY, groupId);
+        setFb(Object.assign({}, fb, { groupId: groupId }));
+        subscribeToGroup(groupId);
+        setSyncPanelOpen(false);
+        setJoinCode("");
+      } catch (e) {
+        setJoinError("연결 중 오류가 발생했습니다.");
+      }
+      setJoining(false);
+    }
+
+    var cardsArr = Object.keys(cardsMap).map(function (k) { return cardsMap[k]; });
+    var sorted = cardsArr.slice().sort(function (a, b) { return b.touchedAt - a.touchedAt; });
+    var current = open ? cardsMap[open] : null;
 
     var children = [];
 
@@ -183,12 +351,26 @@ window.addEventListener("error", function (e) {
         h("div", { style: S.kicker }, "매일 마주하는 질문들"),
         h("h1", { style: S.title }, "성찰의 카드")
       ),
-      h("button", { style: S.addBtn, onClick: function () { setComposing(true); }, "aria-label": "새 카드 추가" },
-        h(Icon, { name: "plus", size: 18 })
+      h("div", { style: { display: "flex", gap: 8 } },
+        h("button", { style: S.iconCircleBtn, onClick: function () { setSyncPanelOpen(true); }, "aria-label": "기기 동기화" },
+          h(Icon, { name: "cloud", size: 17 })
+        ),
+        h("button", { style: S.addBtn, onClick: function () { setComposing(true); }, "aria-label": "새 카드 추가" },
+          h(Icon, { name: "plus", size: 18 })
+        )
       )
     ));
 
-    if (sorted.length === 0) {
+    if (fbError) {
+      children.push(h("div", { style: S.errorBanner, key: "error" }, fbError));
+    }
+
+    if (loading) {
+      children.push(h("div", { style: S.empty, key: "loading" },
+        h("span", { className: "rc-spinner" }),
+        h("p", { style: { margin: "14px 0 0", opacity: 0.6, fontSize: 14, fontFamily: "var(--sans)" } }, "클라우드에서 불러오는 중…")
+      ));
+    } else if (sorted.length === 0) {
       children.push(h("div", { style: S.empty, key: "empty" },
         h(QuoteIcon, { size: 28, style: { opacity: 0.4 } }),
         h("p", { style: { margin: "14px 0 4px", fontWeight: 700 } }, "아직 카드가 없습니다"),
@@ -227,6 +409,35 @@ window.addEventListener("error", function (e) {
           h("div", { style: S.composerActions },
             h("button", { style: S.ghostBtn, onClick: function () { setComposing(false); } }, "취소"),
             h("button", { style: S.primaryBtn, onClick: addCard }, "카드 만들기")
+          )
+        )
+      ));
+    }
+
+    if (syncPanelOpen) {
+      var myCode = fb ? fb.uidToCode(fb.uid) : "";
+      children.push(h("div", { style: S.overlay, key: "sync-overlay", onClick: function () { setSyncPanelOpen(false); } },
+        h("div", { style: S.composer, onClick: function (e) { e.stopPropagation(); } },
+          h("div", { style: S.composerLabel }, "이 기기의 동기화 코드"),
+          h("div", { style: S.syncCodeBox }, myCode || "불러오는 중…"),
+          h("p", { style: S.syncHint }, "다른 기기에서 아래 입력란에 이 코드를 입력하면 같은 카드 목록을 보게 됩니다."),
+          h("div", { style: S.fieldLabel }, "다른 기기의 코드로 연결하기"),
+          h("div", { style: { display: "flex", gap: 8 } },
+            h("input", {
+              value: joinCode,
+              onChange: function (e) { setJoinCode(e.target.value); setJoinError(""); },
+              placeholder: "XXXX-XXXX",
+              style: Object.assign({}, S.sourceInput, { flex: 1 }),
+              onKeyDown: function (e) { if (e.key === "Enter") handleJoin(); }
+            }),
+            h("button", {
+              style: Object.assign({}, S.primaryBtn, { opacity: joining ? 0.6 : 1 }),
+              onClick: handleJoin, disabled: joining
+            }, joining ? "연결 중…" : "연결")
+          ),
+          joinError ? h("p", { style: S.syncError }, joinError) : null,
+          h("div", { style: S.composerActions },
+            h("button", { style: S.ghostBtn, onClick: function () { setSyncPanelOpen(false); } }, "닫기")
           )
         )
       ));
@@ -274,6 +485,8 @@ window.addEventListener("error", function (e) {
     kicker: { fontFamily: "var(--sans)", fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 6 },
     title: { margin: 0, fontSize: 30, fontWeight: 700, letterSpacing: "-0.01em" },
     addBtn: { width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--ink)", background: "var(--ink)", color: "var(--paper)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
+    iconCircleBtn: { width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--line)", background: "var(--card)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
+    errorBanner: { background: "#fdeeea", border: "1px solid #f0c4b8", color: "#9c4221", borderRadius: 10, padding: "10px 14px", fontFamily: "var(--sans)", fontSize: 13, marginBottom: 18 },
     grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 },
     card: { textAlign: "left", background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, padding: "18px 18px 14px", cursor: "pointer", display: "flex", flexDirection: "column", minHeight: 130, color: "inherit", boxShadow: "0 1px 2px rgba(40,30,10,0.04)" },
     cardQuote: { color: "var(--accent)", opacity: 0.55, marginBottom: 10 },
@@ -295,9 +508,12 @@ window.addEventListener("error", function (e) {
     detailBody: { maxWidth: 640, margin: "0 auto", padding: "26px 22px 80px" },
     detailPhrase: { width: "100%", border: "none", background: "none", fontSize: 26, lineHeight: 1.4, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink)", resize: "none", letterSpacing: "-0.01em", outline: "none" },
     fieldLabel: { fontFamily: "var(--sans)", fontSize: 11.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--accent)", margin: "30px 0 8px" },
-    sourceInput: { width: "100%", border: "none", borderBottom: "1px solid var(--line)", background: "none", fontSize: 17, fontFamily: "var(--serif)", color: "var(--ink)", padding: "4px 0 8px", outline: "none" },
+    sourceInput: { width: "100%", border: "1px solid var(--line)", borderRadius: 8, background: "var(--card)", fontSize: 16, fontFamily: "var(--serif)", color: "var(--ink)", padding: "10px 12px", boxSizing: "border-box", outline: "none" },
     insightInput: { width: "100%", minHeight: 220, border: "1px solid var(--line)", borderRadius: 12, background: "var(--card)", fontSize: 17, lineHeight: 1.6, fontFamily: "var(--serif)", color: "var(--ink)", padding: 16, resize: "vertical", outline: "none" },
-    detailFooter: { marginTop: 28, fontFamily: "var(--sans)", fontSize: 12, opacity: 0.45 }
+    detailFooter: { marginTop: 28, fontFamily: "var(--sans)", fontSize: 12, opacity: 0.45 },
+    syncCodeBox: { fontFamily: "var(--sans)", fontSize: 28, fontWeight: 700, letterSpacing: "0.08em", textAlign: "center", background: "var(--card)", border: "1px dashed var(--accent)", borderRadius: 10, padding: "16px 0", color: "var(--accent)" },
+    syncHint: { fontFamily: "var(--sans)", fontSize: 13, opacity: 0.65, margin: "12px 0 22px", lineHeight: 1.5 },
+    syncError: { fontFamily: "var(--sans)", fontSize: 13, color: "#c0392b", marginTop: 8, marginBottom: 0 }
   };
 
   var rootEl = document.getElementById("root");
