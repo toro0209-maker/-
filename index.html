@@ -1,347 +1,43 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>자기계발 장부</title>
-<meta name="theme-color" content="#1F2A24" />
-<link rel="manifest" href="manifest.json" />
-<link rel="apple-touch-icon" href="icons/icon-192.png" />
+const CACHE_NAME = 'ledger-cache-v1';
+const CORE_ASSETS = [
+  './index.html',
+  './app.js',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+];
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600;700&family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
+  );
+  self.skipWaiting();
+});
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
 
-<style>
-:root{
-  --ink:#1F2A24;
-  --ink-soft:#3A453E;
-  --paper:#F3EDE0;
-  --paper-deep:#E8E0CC;
-  --paper-line:#C9BFA5;
-  --stamp:#8B3A2F;
-  --stamp-soft:#8B3A2F22;
-  --gold:#9C7A3C;
-  --serif:'Noto Serif KR', serif;
-  --sans:'Pretendard', -apple-system, sans-serif;
-  --shadow: 0 1px 2px rgba(31,42,36,0.08), 0 2px 8px rgba(31,42,36,0.06);
-}
-*{box-sizing:border-box;}
-html,body{margin:0;padding:0;}
-body{
-  background:var(--paper);
-  background-image:
-    radial-gradient(circle at 20% 10%, rgba(156,122,60,0.05), transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(139,58,47,0.04), transparent 40%);
-  color:var(--ink);
-  font-family:var(--sans);
-  -webkit-font-smoothing:antialiased;
-  min-height:100vh;
-}
-button{font-family:var(--sans);cursor:pointer;border:none;background:none;color:inherit;}
-input,textarea{font-family:var(--sans);}
-a{color:var(--stamp);}
-
-::-webkit-scrollbar{width:8px;height:8px;}
-::-webkit-scrollbar-thumb{background:var(--paper-line);border-radius:4px;}
-
-/* ===== App Shell ===== */
-#app{max-width:680px;margin:0 auto;padding:0 16px 80px;min-height:100vh;}
-
-/* ===== Header ===== */
-.app-header{
-  position:sticky;top:0;z-index:30;
-  background:var(--paper);
-  padding:18px 0 12px;
-  border-bottom:1px solid var(--paper-line);
-}
-.header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
-.brand{display:flex;flex-direction:column;gap:2px;}
-.brand-eyebrow{
-  font-family:var(--sans);font-size:11px;letter-spacing:0.12em;
-  color:var(--ink-soft);text-transform:uppercase;font-weight:600;
-}
-.brand-title{
-  font-family:var(--serif);font-size:22px;font-weight:700;color:var(--ink);
-  letter-spacing:-0.01em;
-}
-.sync-pill{
-  font-family:var(--sans);font-size:11px;color:var(--ink-soft);
-  border:1px solid var(--paper-line);border-radius:20px;padding:5px 10px;
-  display:flex;align-items:center;gap:5px;white-space:nowrap;
-  background:rgba(255,255,255,0.4);
-}
-.sync-dot{width:6px;height:6px;border-radius:50%;background:#5C7A5E;flex-shrink:0;}
-.sync-dot.off{background:#B5523E;}
-
-/* ===== Calendar stamp block ===== */
-.cal-wrap{margin-top:14px;}
-.cal-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
-.cal-month{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--ink);}
-.cal-nav{display:flex;gap:2px;}
-.cal-nav button{
-  width:26px;height:26px;border-radius:6px;color:var(--ink-soft);font-size:14px;
-  display:flex;align-items:center;justify-content:center;
-}
-.cal-nav button:hover{background:var(--paper-deep);}
-.cal-grid{
-  display:flex;flex-wrap:wrap;gap:4px;
-}
-.cal-dow{
-  width:calc((100% - 24px)/7);
-  font-size:10px;color:var(--ink-soft);text-align:center;padding-bottom:2px;
-  font-weight:600;opacity:0.6;
-}
-.cal-cell{
-  position:relative;width:calc((100% - 24px)/7);height:38px;display:flex;align-items:center;justify-content:center;
-  border-radius:8px;
-}
-.cal-cell.pad{visibility:hidden;}
-.cal-daynum{
-  font-family:var(--sans);font-size:12px;color:var(--ink-soft);position:relative;z-index:2;
-}
-.cal-cell.today .cal-daynum{color:var(--stamp);font-weight:700;}
-.cal-cell.today::after{
-  content:'';position:absolute;inset:2px;border:1px solid var(--stamp);border-radius:8px;
-}
-.stamp-ring{
-  position:absolute;inset:3px;border-radius:50%;
-}
-/* progress ring via conic-gradient, hand-stamped feel via slight rotation/opacity */
-.stamp-ring svg{width:100%;height:100%;transform:rotate(-90deg);}
-.stamp-ring circle.track{stroke:var(--paper-line);}
-.stamp-ring circle.fill{stroke:var(--stamp);stroke-linecap:round;transition:stroke-dashoffset 0.3s;}
-.cal-cell.full .stamp-ring circle.fill{stroke:var(--stamp);}
-.cal-cell.full .cal-daynum{color:#fff;font-weight:700;}
-.cal-cell.full .stamp-fill-bg{
-  position:absolute;inset:3px;border-radius:50%;background:var(--stamp);opacity:0.92;
-}
-.cal-cell.selected::before{
-  content:'';position:absolute;inset:0;border:1.5px dashed var(--gold);border-radius:8px;
-}
-
-/* ===== Day detail strip ===== */
-.day-strip{
-  margin-top:10px;padding:10px 12px;background:var(--paper-deep);border-radius:10px;
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  font-size:12px;color:var(--ink-soft);
-}
-.day-strip strong{color:var(--ink);font-family:var(--serif);font-size:13px;}
-.day-strip .clear-btn{font-size:11px;text-decoration:underline;color:var(--stamp);flex-shrink:0;}
-
-/* ===== Banner list ===== */
-.banners{margin-top:22px;display:flex;flex-direction:column;gap:16px;}
-
-.banner{
-  background:rgba(255,255,255,0.55);
-  border:1px solid var(--paper-line);
-  border-radius:14px;
-  overflow:hidden;
-  box-shadow:var(--shadow);
-}
-.banner-head{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:14px 16px 12px;cursor:pointer;
-  border-bottom:1px solid transparent;
-}
-.banner.expanded .banner-head{border-bottom-color:var(--paper-line);}
-.banner-head-left{display:flex;align-items:center;gap:10px;min-width:0;}
-.banner-stamp{
-  width:36px;height:36px;border-radius:50%;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;
-  font-family:var(--serif);font-weight:700;font-size:15px;color:#fff;
-  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0.4);
-}
-.banner-meta{min-width:0;}
-.banner-name{font-family:var(--serif);font-size:16px;font-weight:600;color:var(--ink);}
-.banner-sub{font-size:11px;color:var(--ink-soft);margin-top:1px;}
-.banner-head-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
-.banner-today-check{
-  width:20px;height:20px;border-radius:50%;border:1.5px solid var(--paper-line);
-  display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;
-}
-.banner-today-check.done{background:var(--stamp);border-color:var(--stamp);color:#fff;}
-.chevron{font-size:12px;color:var(--ink-soft);transition:transform 0.2s;}
-.banner.expanded .chevron{transform:rotate(180deg);}
-
-.banner-body{display:none;}
-.banner.expanded .banner-body{display:block;}
-
-.composer{padding:12px 16px;border-bottom:1px solid var(--paper-line);background:rgba(255,255,255,0.3);}
-.composer textarea{
-  width:100%;min-height:54px;resize:none;border:none;outline:none;background:transparent;
-  font-family:var(--serif);font-size:14.5px;line-height:1.6;color:var(--ink);
-}
-.composer textarea::placeholder{color:var(--ink-soft);opacity:0.55;font-family:var(--sans);font-size:13px;}
-.composer-attach-preview{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0;}
-.attach-chip{
-  display:flex;align-items:center;gap:6px;background:var(--paper-deep);border-radius:8px;
-  padding:5px 9px;font-size:11px;color:var(--ink-soft);max-width:200px;
-}
-.attach-chip img{width:18px;height:18px;border-radius:4px;object-fit:cover;}
-.attach-chip .x{color:var(--stamp);font-weight:700;cursor:pointer;flex-shrink:0;}
-.composer-row{display:flex;align-items:center;justify-content:space-between;margin-top:8px;}
-.composer-tools{display:flex;gap:4px;}
-.tool-btn{
-  width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-  color:var(--ink-soft);font-size:15px;
-}
-.tool-btn:hover{background:var(--paper-deep);color:var(--ink);}
-.send-btn{
-  font-family:var(--sans);font-size:12.5px;font-weight:600;color:#fff;background:var(--ink);
-  padding:7px 16px;border-radius:8px;
-}
-.send-btn:disabled{opacity:0.35;}
-.link-input-row{display:none;gap:6px;margin-top:8px;}
-.link-input-row.show{display:flex;}
-.link-input-row input{
-  flex:1;border:1px solid var(--paper-line);background:#fff;border-radius:7px;padding:7px 10px;
-  font-size:12.5px;color:var(--ink);outline:none;
-}
-.link-input-row button{font-size:12px;background:var(--ink);color:#fff;padding:7px 12px;border-radius:7px;}
-
-.feed{padding:6px 16px 16px;display:flex;flex-direction:column;gap:14px;max-height:520px;overflow-y:auto;}
-.feed-empty{
-  padding:30px 10px;text-align:center;color:var(--ink-soft);font-size:13px;
-  font-family:var(--serif);
-}
-.entry{display:flex;gap:10px;}
-.entry-rail{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:20px;}
-.entry-dot{width:7px;height:7px;border-radius:50%;background:var(--paper-line);margin-top:6px;flex-shrink:0;}
-.entry-line{flex:1;width:1px;background:var(--paper-line);margin-top:4px;}
-.entry-body{flex:1;min-width:0;padding-bottom:2px;}
-.entry-time{font-size:10.5px;color:var(--ink-soft);margin-bottom:3px;}
-.entry-text{
-  font-family:var(--serif);font-size:14.5px;line-height:1.7;color:var(--ink);
-  white-space:pre-wrap;word-break:break-word;
-}
-.entry-media{margin-top:8px;display:flex;flex-direction:column;gap:8px;}
-.entry-img{max-width:100%;border-radius:8px;border:1px solid var(--paper-line);display:block;}
-.entry-file,.entry-link{
-  display:flex;align-items:center;gap:8px;background:var(--paper-deep);border-radius:8px;
-  padding:8px 10px;font-size:12.5px;color:var(--ink);text-decoration:none;max-width:100%;
-}
-.entry-file .ico,.entry-link .ico{flex-shrink:0;font-size:14px;}
-.entry-file span,.entry-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.entry-del{
-  font-size:10.5px;color:var(--ink-soft);opacity:0;transition:opacity 0.15s;margin-left:6px;
-}
-.entry:hover .entry-del{opacity:0.7;}
-.entry-del:hover{color:var(--stamp);opacity:1;}
-
-/* ===== Sync panel ===== */
-.sync-overlay{
-  position:fixed;inset:0;background:rgba(31,42,36,0.45);z-index:90;
-  display:none;align-items:flex-end;justify-content:center;
-}
-.sync-overlay.show{display:flex;}
-.sync-sheet{
-  background:var(--paper);width:100%;max-width:680px;border-radius:18px 18px 0 0;
-  padding:20px 20px 28px;max-height:80vh;overflow-y:auto;
-}
-.sync-sheet h3{font-family:var(--serif);font-size:17px;margin:0 0 4px;}
-.sync-sheet p{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 14px;}
-.sync-code-display{
-  font-family:var(--serif);font-size:26px;letter-spacing:0.08em;text-align:center;
-  background:var(--paper-deep);border-radius:12px;padding:16px;margin-bottom:14px;color:var(--ink);
-  font-weight:700;
-}
-.sync-input-group{display:flex;gap:8px;margin-bottom:10px;}
-.sync-input-group input{
-  flex:1;border:1px solid var(--paper-line);background:#fff;border-radius:9px;padding:10px 12px;
-  font-size:14px;letter-spacing:0.05em;outline:none;
-}
-.sync-btn-primary{
-  background:var(--ink);color:#fff;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;
-}
-.sync-btn-secondary{
-  width:100%;text-align:center;padding:10px;border-radius:9px;border:1px solid var(--paper-line);
-  font-size:13px;color:var(--ink);margin-top:4px;
-}
-.sync-status-msg{font-size:12px;margin-top:8px;min-height:16px;}
-.sync-status-msg.err{color:var(--stamp);}
-.sync-status-msg.ok{color:#3F6B45;}
-.sync-close{
-  position:absolute;top:14px;right:16px;font-size:20px;color:var(--ink-soft);
-}
-.sync-sheet{position:relative;}
-
-/* fab */
-.fab-sync{
-  position:fixed;bottom:20px;right:20px;z-index:40;
-  width:46px;height:46px;border-radius:50%;background:var(--ink);color:#fff;
-  display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:var(--shadow);
-}
-
-@media (max-width:420px){
-  .brand-title{font-size:19px;}
-  .feed{max-height:440px;}
-}
-</style>
-</head>
-<body>
-<div id="app">
-
-  <header class="app-header">
-    <div class="header-row">
-      <div class="brand">
-        <span class="brand-eyebrow">Daily Ledger</span>
-        <span class="brand-title">자기계발 장부</span>
-      </div>
-      <button class="sync-pill" id="syncPillBtn">
-        <span class="sync-dot off" id="syncDot"></span>
-        <span id="syncLabel">연결 안 됨</span>
-      </button>
-    </div>
-
-    <div class="cal-wrap">
-      <div class="cal-top">
-        <span class="cal-month" id="calMonthLabel">2026년 6월</span>
-        <div class="cal-nav">
-          <button id="calPrev">‹</button>
-          <button id="calNext">›</button>
-        </div>
-      </div>
-      <div class="cal-grid" id="calGrid"></div>
-    </div>
-
-    <div class="day-strip" id="dayStrip" style="display:none;">
-      <span><strong id="dayStripDate"></strong> · <span id="dayStripCount"></span>/5 배너 기록</span>
-      <span class="clear-btn" id="dayStripClear">오늘 보기</span>
-    </div>
-  </header>
-
-  <main class="banners" id="banners"></main>
-
-</div>
-
-<button class="fab-sync" id="fabSync" title="기기 동기화">⇄</button>
-
-<div class="sync-overlay" id="syncOverlay">
-  <div class="sync-sheet">
-    <button class="sync-close" id="syncCloseBtn">×</button>
-    <h3>기기 동기화</h3>
-    <p>이 장부를 다른 기기(휴대폰 ↔ PC)와 연결해서 같은 기록을 보고 쓸 수 있습니다. 코드를 아는 사람은 누구나 접근할 수 있으니 비밀번호처럼 보관하세요.</p>
-
-    <div id="syncMyCodeBlock">
-      <p style="margin-bottom:6px;font-weight:600;color:var(--ink);">이 기기의 연결 코드</p>
-      <div class="sync-code-display" id="myCodeDisplay">— — — —</div>
-    </div>
-
-    <p style="margin-top:18px;margin-bottom:6px;font-weight:600;color:var(--ink);">다른 기기 코드로 연결하기</p>
-    <div class="sync-input-group">
-      <input id="joinCodeInput" placeholder="XXXX-XXXX" maxlength="9" />
-      <button class="sync-btn-primary" id="joinCodeBtn">연결</button>
-    </div>
-    <div class="sync-status-msg" id="syncStatusMsg"></div>
-  </div>
-</div>
-
-<script src="app.js"></script>
-</body>
-</html>
+// 네트워크 우선, 실패 시 캐시 (Firestore 실시간 연결과 충돌하지 않도록
+// firestore/googleapis 요청은 가로채지 않음)
+self.addEventListener('fetch', (event) => {
+  const url = event.request.url;
+  if (url.includes('firestore.googleapis.com') || url.includes('googleapis.com') || url.includes('gstatic.com') || url.includes('fonts.')) {
+    return; // 그대로 네트워크로 통과
+  }
+  event.respondWith(
+    fetch(event.request)
+      .then((res) => {
+        const resClone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+        return res;
+      })
+      .catch(() => caches.match(event.request))
+  );
+});
 
