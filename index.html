@@ -7,21 +7,13 @@
 <meta name="description" content="매일 마주하고 싶은 문장을 카드로 모아두고, 그 안에서 얻은 인사이트를 적어두는 성찰 노트" />
 <title>성찰의 카드</title>
 
-<!-- PWA: 설치 가능한 앱으로 만들기 위한 매니페스트 -->
 <link rel="manifest" href="manifest.json" />
-
-<!-- 홈 화면 아이콘 -->
 <link rel="icon" href="icon-192.png" />
 <link rel="apple-touch-icon" href="icon-192.png" />
-
-<!-- iOS에서 홈 화면 추가 시 더 앱답게 보이도록 -->
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="성찰의 카드" />
 
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
   :root {
     --ink: #1d1b16;
@@ -30,12 +22,11 @@
     --line: #e2dccd;
     --card: #fffdf8;
     --serif: "Gowun Batang", "Iowan Old Style", Georgia, serif;
-    --sans: "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+    --sans: -apple-system, "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html, body { margin: 0; padding: 0; background: var(--paper); }
   body {
-    background: var(--paper);
     color: var(--ink);
     font-family: var(--serif);
     -webkit-font-smoothing: antialiased;
@@ -49,227 +40,276 @@
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
   @media (prefers-reduced-motion: reduce) { .rc-card { transition: none; } }
+
+  /* 폴백: 자바스크립트가 아예 실행되지 못한 극단적 상황에서도
+     완전한 백지 화면 대신 안내문이 보이도록 */
+  #fallback-msg {
+    max-width: 480px; margin: 80px auto; padding: 0 20px;
+    text-align: center; font-family: var(--sans); color: var(--ink);
+  }
 </style>
 </head>
 <body>
-<div id="root"></div>
 
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<div id="root">
+  <div id="fallback-msg">
+    <p style="font-weight:600; margin-bottom:8px;">화면을 불러오는 중입니다…</p>
+    <p style="opacity:.6; font-size:14px;">
+      잠시 후에도 이 화면이 그대로라면 자바스크립트 로딩에 문제가 있는 것입니다.
+      페이지를 새로고침해 주세요.
+    </p>
+  </div>
+</div>
 
-<script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+<!-- React/ReactDOM을 로컬 파일로 직접 포함 (외부 CDN 차단 환경에서도 항상 동작) -->
+<script src="react.production.min.js"></script>
+<script src="react-dom.production.min.js"></script>
 
-// ── Storage (localStorage) ────────────────────────────────────
-const STORE_KEY = "reflection:cards";
-
-function loadCards() {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  return [];
-}
-function saveCards(cards) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(cards)); }
-  catch (e) { console.error("저장에 실패했습니다", e); }
-}
-
-// ── Helpers ───────────────────────────────────────────────────
-function relTime(ts) {
-  const diff = Date.now() - ts;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "방금";
-  if (m < 60) return m + "분 전";
-  const h = Math.floor(m / 60);
-  if (h < 24) return h + "시간 전";
-  const d = Math.floor(h / 24);
-  if (d < 30) return d + "일 전";
-  const mo = Math.floor(d / 30);
-  if (mo < 12) return mo + "개월 전";
-  return Math.floor(mo / 12) + "년 전";
-}
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-
-// Quote icon (inline SVG so there's no icon-library dependency)
-function QuoteIcon({ size = 16, style }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-      strokeLinejoin="round" style={style}>
-      <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2-2-2H4c-1.25 0-2 .75-2 2v4c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/>
-      <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2-2-2h-4c-1.25 0-2 .75-2 2v4c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>
-    </svg>
-  );
-}
-function Icon({ name, size = 20 }) {
-  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none",
-    stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
-  if (name === "plus") return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>;
-  if (name === "back") return <svg {...p}><path d="M19 12H5M12 19l-7-7 7-7"/></svg>;
-  if (name === "trash") return <svg {...p}><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
-  return null;
-}
-
-function App() {
-  const [cards, setCards] = useState([]);
-  const [open, setOpen] = useState(null);
-  const [composing, setComposing] = useState(false);
-  const [newPhrase, setNewPhrase] = useState("");
-
-  useEffect(() => { setCards(loadCards()); }, []);
-
-  const persist = useCallback((next) => { setCards(next); saveCards(next); }, []);
-
-  const touch = (id) =>
-    persist(cards.map(c => c.id === id ? { ...c, touchedAt: Date.now() } : c));
-
-  const addCard = () => {
-    const phrase = newPhrase.trim();
-    if (!phrase) return;
-    const now = Date.now();
-    const card = { id: uid(), phrase, source: "", insights: "", createdAt: now, touchedAt: now };
-    persist([card, ...cards]);
-    setNewPhrase(""); setComposing(false); setOpen(card.id);
-  };
-
-  const updateField = (id, field, value) =>
-    persist(cards.map(c => c.id === id ? { ...c, [field]: value, touchedAt: Date.now() } : c));
-
-  const removeCard = (id) => { persist(cards.filter(c => c.id !== id)); setOpen(null); };
-
-  const sorted = [...cards].sort((a, b) => b.touchedAt - a.touchedAt);
-  const current = cards.find(c => c.id === open);
-
-  return (
-    <div style={S.root}>
-      <header style={S.header}>
-        <div>
-          <div style={S.kicker}>매일 마주하는 질문들</div>
-          <h1 style={S.title}>성찰의 카드</h1>
-        </div>
-        <button style={S.addBtn} onClick={() => setComposing(true)} aria-label="새 카드 추가">
-          <Icon name="plus" size={18} />
-        </button>
-      </header>
-
-      {sorted.length === 0 ? (
-        <div style={S.empty}>
-          <QuoteIcon size={28} style={{ opacity: 0.4 }} />
-          <p style={{ margin: "14px 0 4px", fontWeight: 700 }}>아직 카드가 없습니다</p>
-          <p style={{ margin: 0, opacity: 0.6, fontSize: 14, fontFamily: "var(--sans)" }}>
-            오른쪽 위 + 를 눌러 깊이 생각하고 싶은<br/>문장을 하나 적어보세요.
-          </p>
-        </div>
-      ) : (
-        <div style={S.grid}>
-          {sorted.map(c => (
-            <button key={c.id} className="rc-card" style={S.card}
-              onClick={() => { touch(c.id); setOpen(c.id); }}>
-              <QuoteIcon size={16} style={S.cardQuote} />
-              <div style={S.cardPhrase}>{c.phrase}</div>
-              <div style={S.cardMeta}>
-                {c.source ? <span style={S.cardSource}>{c.source}</span> : <span/>}
-                <span style={S.cardTime}>{relTime(c.touchedAt)}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {composing && (
-        <div style={S.overlay} onClick={() => setComposing(false)}>
-          <div style={S.composer} onClick={e => e.stopPropagation()}>
-            <div style={S.composerLabel}>마주하고 싶은 문장</div>
-            <textarea autoFocus value={newPhrase}
-              onChange={e => setNewPhrase(e.target.value)}
-              placeholder="예) 나는 오늘 무엇을 더 나아지게 했는가?"
-              style={S.composerInput}
-              onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) addCard(); }} />
-            <div style={S.composerActions}>
-              <button style={S.ghostBtn} onClick={() => setComposing(false)}>취소</button>
-              <button style={S.primaryBtn} onClick={addCard}>카드 만들기</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {current && (
-        <div style={S.detailWrap}>
-          <div style={S.detailBar}>
-            <button style={S.iconBtn} onClick={() => setOpen(null)} aria-label="뒤로">
-              <Icon name="back" size={20} />
-            </button>
-            <button style={S.iconBtn} onClick={() => removeCard(current.id)} aria-label="카드 삭제">
-              <Icon name="trash" size={18} />
-            </button>
-          </div>
-          <div style={S.detailBody}>
-            <div style={{ color: "var(--accent)", marginBottom: 12 }}><QuoteIcon size={22} /></div>
-            <textarea value={current.phrase}
-              onChange={e => updateField(current.id, "phrase", e.target.value)}
-              style={S.detailPhrase} rows={2} />
-            <div style={S.fieldLabel}>출처 · 어디에서 왔는가</div>
-            <input value={current.source}
-              onChange={e => updateField(current.id, "source", e.target.value)}
-              placeholder="책, 사람, 경험…" style={S.sourceInput} />
-            <div style={S.fieldLabel}>인사이트 · 생각하며 얻은 것</div>
-            <textarea value={current.insights}
-              onChange={e => updateField(current.id, "insights", e.target.value)}
-              placeholder="이 문장을 곱씹으며 떠오른 생각을 자유롭게 적어보세요."
-              style={S.insightInput} />
-            <div style={S.detailFooter}>
-              처음 만든 날: {new Date(current.createdAt).toLocaleDateString("ko-KR")}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const S = {
-  root: { maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px", minHeight: "100vh" },
-  header: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28 },
-  kicker: { fontFamily: "var(--sans)", fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 6 },
-  title: { margin: 0, fontSize: 30, fontWeight: 700, letterSpacing: "-0.01em" },
-  addBtn: { width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--ink)", background: "var(--ink)", color: "var(--paper)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 },
-  card: { textAlign: "left", background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, padding: "18px 18px 14px", cursor: "pointer", display: "flex", flexDirection: "column", minHeight: 130, color: "inherit", boxShadow: "0 1px 2px rgba(40,30,10,0.04)" },
-  cardQuote: { color: "var(--accent)", opacity: 0.55, marginBottom: 10 },
-  cardPhrase: { fontSize: 17, lineHeight: 1.45, fontWeight: 700, flex: 1, letterSpacing: "-0.005em" },
-  cardMeta: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 14, fontFamily: "var(--sans)", fontSize: 11.5 },
-  cardSource: { color: "var(--accent)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 },
-  cardTime: { opacity: 0.45, flexShrink: 0 },
-  empty: { textAlign: "center", padding: "80px 20px" },
-  overlay: { position: "fixed", inset: 0, background: "rgba(29,27,22,0.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 },
-  composer: { background: "var(--paper)", borderRadius: 18, padding: 22, width: "100%", maxWidth: 440, boxShadow: "0 20px 50px rgba(0,0,0,0.2)" },
-  composerLabel: { fontFamily: "var(--sans)", fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 },
-  composerInput: { width: "100%", minHeight: 80, border: "1px solid var(--line)", borderRadius: 10, padding: 12, fontSize: 18, fontFamily: "var(--serif)", background: "var(--card)", resize: "vertical", color: "var(--ink)" },
-  composerActions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 },
-  ghostBtn: { border: "none", background: "none", padding: "10px 16px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 14, color: "var(--ink)", borderRadius: 8 },
-  primaryBtn: { border: "none", background: "var(--ink)", color: "var(--paper)", padding: "10px 18px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 14, fontWeight: 600, borderRadius: 8 },
-  detailWrap: { position: "fixed", inset: 0, background: "var(--paper)", zIndex: 60, overflowY: "auto" },
-  detailBar: { display: "flex", justifyContent: "space-between", padding: "16px 18px", position: "sticky", top: 0, background: "var(--paper)", borderBottom: "1px solid var(--line)" },
-  iconBtn: { border: "none", background: "none", cursor: "pointer", color: "var(--ink)", padding: 6, display: "flex" },
-  detailBody: { maxWidth: 640, margin: "0 auto", padding: "26px 22px 80px" },
-  detailPhrase: { width: "100%", border: "none", background: "none", fontSize: 26, lineHeight: 1.4, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink)", resize: "none", letterSpacing: "-0.01em", outline: "none" },
-  fieldLabel: { fontFamily: "var(--sans)", fontSize: 11.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--accent)", margin: "30px 0 8px" },
-  sourceInput: { width: "100%", border: "none", borderBottom: "1px solid var(--line)", background: "none", fontSize: 17, fontFamily: "var(--serif)", color: "var(--ink)", padding: "4px 0 8px", outline: "none" },
-  insightInput: { width: "100%", minHeight: 220, border: "1px solid var(--line)", borderRadius: 12, background: "var(--card)", fontSize: 17, lineHeight: 1.6, fontFamily: "var(--serif)", color: "var(--ink)", padding: 16, resize: "vertical", outline: "none" },
-  detailFooter: { marginTop: 28, fontFamily: "var(--sans)", fontSize: 12, opacity: 0.45 },
-};
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+<script>
+// 자바스크립트 실행 중 어떤 에러가 나도 화면이 완전 백지가 되지 않도록
+// 전역에서 잡아 사용자에게 보여준다.
+window.addEventListener("error", function (e) {
+  var root = document.getElementById("root");
+  if (root && !root.dataset.rendered) {
+    root.innerHTML =
+      '<div id="fallback-msg">' +
+      '<p style="font-weight:600;margin-bottom:8px;">화면을 불러오는 중 오류가 발생했습니다</p>' +
+      '<p style="opacity:.6;font-size:14px;word-break:break-all;">' + (e.message || "알 수 없는 오류") + '</p>' +
+      '</div>';
+  }
+});
 </script>
 
 <script>
-  // 서비스 워커 등록 — 오프라인 동작과 홈 화면 설치를 가능하게 한다.
-  // file:// 로 직접 열면 동작하지 않으며, http(s) 서버를 통해 열어야 한다.
+(function () {
+  var h = React.createElement;
+  var useState = React.useState;
+  var useEffect = React.useEffect;
+  var useCallback = React.useCallback;
+
+  // ── Storage (localStorage) ──────────────────────────────
+  var STORE_KEY = "reflection:cards";
+  function loadCards() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return [];
+  }
+  function saveCards(cards) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(cards)); }
+    catch (e) { console.error("저장에 실패했습니다", e); }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────
+  function relTime(ts) {
+    var diff = Date.now() - ts;
+    var m = Math.floor(diff / 60000);
+    if (m < 1) return "방금";
+    if (m < 60) return m + "분 전";
+    var hh = Math.floor(m / 60);
+    if (hh < 24) return hh + "시간 전";
+    var d = Math.floor(hh / 24);
+    if (d < 30) return d + "일 전";
+    var mo = Math.floor(d / 30);
+    if (mo < 12) return mo + "개월 전";
+    return Math.floor(mo / 12) + "년 전";
+  }
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function QuoteIcon(props) {
+    var size = (props && props.size) || 16;
+    var style = props && props.style;
+    return h("svg", {
+      width: size, height: size, viewBox: "0 0 24 24", fill: "none",
+      stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round",
+      strokeLinejoin: "round", style: style
+    },
+      h("path", { d: "M3 21c3 0 7-1 7-8V5c0-1.25-.756-2-2-2H4c-1.25 0-2 .75-2 2v4c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" }),
+      h("path", { d: "M15 21c3 0 7-1 7-8V5c0-1.25-.757-2-2-2h-4c-1.25 0-2 .75-2 2v4c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" })
+    );
+  }
+
+  function Icon(props) {
+    var name = props.name, size = props.size || 20;
+    var common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none",
+      stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
+    if (name === "plus") return h("svg", common, h("path", { d: "M12 5v14M5 12h14" }));
+    if (name === "back") return h("svg", common, h("path", { d: "M19 12H5M12 19l-7-7 7-7" }));
+    if (name === "trash") return h("svg", common, h("path", { d: "M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" }));
+    return null;
+  }
+
+  function App() {
+    var cardsState = useState([]); var cards = cardsState[0], setCards = cardsState[1];
+    var openState = useState(null); var open = openState[0], setOpen = openState[1];
+    var composingState = useState(false); var composing = composingState[0], setComposing = composingState[1];
+    var newPhraseState = useState(""); var newPhrase = newPhraseState[0], setNewPhrase = newPhraseState[1];
+
+    useEffect(function () { setCards(loadCards()); }, []);
+
+    var persist = useCallback(function (next) { setCards(next); saveCards(next); }, []);
+
+    function touch(id) {
+      persist(cards.map(function (c) { return c.id === id ? Object.assign({}, c, { touchedAt: Date.now() }) : c; }));
+    }
+    function addCard() {
+      var phrase = newPhrase.trim();
+      if (!phrase) return;
+      var now = Date.now();
+      var card = { id: uid(), phrase: phrase, source: "", insights: "", createdAt: now, touchedAt: now };
+      persist([card].concat(cards));
+      setNewPhrase(""); setComposing(false); setOpen(card.id);
+    }
+    function updateField(id, field, value) {
+      var patch = {}; patch[field] = value; patch.touchedAt = Date.now();
+      persist(cards.map(function (c) { return c.id === id ? Object.assign({}, c, patch) : c; }));
+    }
+    function removeCard(id) {
+      persist(cards.filter(function (c) { return c.id !== id; }));
+      setOpen(null);
+    }
+
+    var sorted = cards.slice().sort(function (a, b) { return b.touchedAt - a.touchedAt; });
+    var current = null;
+    for (var i = 0; i < cards.length; i++) { if (cards[i].id === open) { current = cards[i]; break; } }
+
+    var children = [];
+
+    children.push(h("header", { style: S.header, key: "header" },
+      h("div", null,
+        h("div", { style: S.kicker }, "매일 마주하는 질문들"),
+        h("h1", { style: S.title }, "성찰의 카드")
+      ),
+      h("button", { style: S.addBtn, onClick: function () { setComposing(true); }, "aria-label": "새 카드 추가" },
+        h(Icon, { name: "plus", size: 18 })
+      )
+    ));
+
+    if (sorted.length === 0) {
+      children.push(h("div", { style: S.empty, key: "empty" },
+        h(QuoteIcon, { size: 28, style: { opacity: 0.4 } }),
+        h("p", { style: { margin: "14px 0 4px", fontWeight: 700 } }, "아직 카드가 없습니다"),
+        h("p", { style: { margin: 0, opacity: 0.6, fontSize: 14, fontFamily: "var(--sans)" } },
+          "오른쪽 위 + 를 눌러 깊이 생각하고 싶은", h("br"), "문장을 하나 적어보세요.")
+      ));
+    } else {
+      children.push(h("div", { style: S.grid, key: "grid" },
+        sorted.map(function (c) {
+          return h("button", {
+            key: c.id, className: "rc-card", style: S.card,
+            onClick: function () { touch(c.id); setOpen(c.id); }
+          },
+            h(QuoteIcon, { size: 16, style: S.cardQuote }),
+            h("div", { style: S.cardPhrase }, c.phrase),
+            h("div", { style: S.cardMeta },
+              c.source ? h("span", { style: S.cardSource }, c.source) : h("span"),
+              h("span", { style: S.cardTime }, relTime(c.touchedAt))
+            )
+          );
+        })
+      ));
+    }
+
+    if (composing) {
+      children.push(h("div", { style: S.overlay, key: "overlay", onClick: function () { setComposing(false); } },
+        h("div", { style: S.composer, onClick: function (e) { e.stopPropagation(); } },
+          h("div", { style: S.composerLabel }, "마주하고 싶은 문장"),
+          h("textarea", {
+            autoFocus: true, value: newPhrase,
+            onChange: function (e) { setNewPhrase(e.target.value); },
+            placeholder: "예) 나는 오늘 무엇을 더 나아지게 했는가?",
+            style: S.composerInput,
+            onKeyDown: function (e) { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) addCard(); }
+          }),
+          h("div", { style: S.composerActions },
+            h("button", { style: S.ghostBtn, onClick: function () { setComposing(false); } }, "취소"),
+            h("button", { style: S.primaryBtn, onClick: addCard }, "카드 만들기")
+          )
+        )
+      ));
+    }
+
+    if (current) {
+      children.push(h("div", { style: S.detailWrap, key: "detail" },
+        h("div", { style: S.detailBar },
+          h("button", { style: S.iconBtn, onClick: function () { setOpen(null); }, "aria-label": "뒤로" },
+            h(Icon, { name: "back", size: 20 })),
+          h("button", { style: S.iconBtn, onClick: function () { removeCard(current.id); }, "aria-label": "카드 삭제" },
+            h(Icon, { name: "trash", size: 18 }))
+        ),
+        h("div", { style: S.detailBody },
+          h("div", { style: { color: "var(--accent)", marginBottom: 12 } }, h(QuoteIcon, { size: 22 })),
+          h("textarea", {
+            value: current.phrase,
+            onChange: function (e) { updateField(current.id, "phrase", e.target.value); },
+            style: S.detailPhrase, rows: 2
+          }),
+          h("div", { style: S.fieldLabel }, "출처 · 어디에서 왔는가"),
+          h("input", {
+            value: current.source,
+            onChange: function (e) { updateField(current.id, "source", e.target.value); },
+            placeholder: "책, 사람, 경험…", style: S.sourceInput
+          }),
+          h("div", { style: S.fieldLabel }, "인사이트 · 생각하며 얻은 것"),
+          h("textarea", {
+            value: current.insights,
+            onChange: function (e) { updateField(current.id, "insights", e.target.value); },
+            placeholder: "이 문장을 곱씹으며 떠오른 생각을 자유롭게 적어보세요.",
+            style: S.insightInput
+          }),
+          h("div", { style: S.detailFooter }, "처음 만든 날: " + new Date(current.createdAt).toLocaleDateString("ko-KR"))
+        )
+      ));
+    }
+
+    return h("div", { style: S.root }, children);
+  }
+
+  var S = {
+    root: { maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px", minHeight: "100vh" },
+    header: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28 },
+    kicker: { fontFamily: "var(--sans)", fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 6 },
+    title: { margin: 0, fontSize: 30, fontWeight: 700, letterSpacing: "-0.01em" },
+    addBtn: { width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--ink)", background: "var(--ink)", color: "var(--paper)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
+    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 },
+    card: { textAlign: "left", background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, padding: "18px 18px 14px", cursor: "pointer", display: "flex", flexDirection: "column", minHeight: 130, color: "inherit", boxShadow: "0 1px 2px rgba(40,30,10,0.04)" },
+    cardQuote: { color: "var(--accent)", opacity: 0.55, marginBottom: 10 },
+    cardPhrase: { fontSize: 17, lineHeight: 1.45, fontWeight: 700, flex: 1, letterSpacing: "-0.005em" },
+    cardMeta: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 14, fontFamily: "var(--sans)", fontSize: 11.5 },
+    cardSource: { color: "var(--accent)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130 },
+    cardTime: { opacity: 0.45, flexShrink: 0 },
+    empty: { textAlign: "center", padding: "80px 20px" },
+    overlay: { position: "fixed", inset: 0, background: "rgba(29,27,22,0.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 },
+    composer: { background: "var(--paper)", borderRadius: 18, padding: 22, width: "100%", maxWidth: 440, boxShadow: "0 20px 50px rgba(0,0,0,0.2)" },
+    composerLabel: { fontFamily: "var(--sans)", fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 10 },
+    composerInput: { width: "100%", minHeight: 80, border: "1px solid var(--line)", borderRadius: 10, padding: 12, fontSize: 18, fontFamily: "var(--serif)", background: "var(--card)", resize: "vertical", color: "var(--ink)" },
+    composerActions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 },
+    ghostBtn: { border: "none", background: "none", padding: "10px 16px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 14, color: "var(--ink)", borderRadius: 8 },
+    primaryBtn: { border: "none", background: "var(--ink)", color: "var(--paper)", padding: "10px 18px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 14, fontWeight: 600, borderRadius: 8 },
+    detailWrap: { position: "fixed", inset: 0, background: "var(--paper)", zIndex: 60, overflowY: "auto" },
+    detailBar: { display: "flex", justifyContent: "space-between", padding: "16px 18px", position: "sticky", top: 0, background: "var(--paper)", borderBottom: "1px solid var(--line)" },
+    iconBtn: { border: "none", background: "none", cursor: "pointer", color: "var(--ink)", padding: 6, display: "flex" },
+    detailBody: { maxWidth: 640, margin: "0 auto", padding: "26px 22px 80px" },
+    detailPhrase: { width: "100%", border: "none", background: "none", fontSize: 26, lineHeight: 1.4, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink)", resize: "none", letterSpacing: "-0.01em", outline: "none" },
+    fieldLabel: { fontFamily: "var(--sans)", fontSize: 11.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--accent)", margin: "30px 0 8px" },
+    sourceInput: { width: "100%", border: "none", borderBottom: "1px solid var(--line)", background: "none", fontSize: 17, fontFamily: "var(--serif)", color: "var(--ink)", padding: "4px 0 8px", outline: "none" },
+    insightInput: { width: "100%", minHeight: 220, border: "1px solid var(--line)", borderRadius: 12, background: "var(--card)", fontSize: 17, lineHeight: 1.6, fontFamily: "var(--serif)", color: "var(--ink)", padding: 16, resize: "vertical", outline: "none" },
+    detailFooter: { marginTop: 28, fontFamily: "var(--sans)", fontSize: 12, opacity: 0.45 }
+  };
+
+  var rootEl = document.getElementById("root");
+  rootEl.dataset.rendered = "1";
+  ReactDOM.createRoot(rootEl).render(h(App));
+})();
+</script>
+
+<script>
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("service-worker.js").catch((err) => {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("service-worker.js").catch(function (err) {
         console.warn("서비스 워커 등록 실패 (file://로 열었다면 정상입니다):", err);
       });
     });

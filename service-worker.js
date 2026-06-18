@@ -1,12 +1,14 @@
 // 성찰의 카드 — 서비스 워커
 // 화면을 그리는 파일만 캐시한다. 사용자 데이터(localStorage)는 건드리지 않는다.
 
-const CACHE_NAME = "reflection-cards-v1";
+const CACHE_NAME = "reflection-cards-v2";
 const CORE_ASSETS = [
   "./index.html",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
+  "./react.production.min.js",
+  "./react-dom.production.min.js",
 ];
 
 // 설치: 핵심 파일을 미리 내려받아 캐시에 저장
