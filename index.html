@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>자기계발 기록</title>
+<title>자기계발 장부</title>
 <meta name="theme-color" content="#1F2A24" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -92,12 +92,12 @@ a{color:var(--stamp);}
   display:flex;flex-wrap:wrap;gap:4px;
 }
 .cal-dow{
-  width:calc((100% - 24px)/7);
+  flex:0 0 calc((100% - 24px)/7);max-width:44px;
   font-size:10px;color:var(--ink-soft);text-align:center;padding-bottom:2px;
   font-weight:600;opacity:0.6;
 }
 .cal-cell{
-  position:relative;width:calc((100% - 24px)/7);height:38px;display:flex;align-items:center;justify-content:center;
+  position:relative;flex:0 0 calc((100% - 24px)/7);max-width:44px;height:38px;display:flex;align-items:center;justify-content:center;
   border-radius:8px;
 }
 .cal-cell.pad{visibility:hidden;}
@@ -277,9 +277,46 @@ a{color:var(--stamp);}
   display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:var(--shadow);
 }
 
-@media (max-width:420px){
-  .brand-title{font-size:19px;}
-  .feed{max-height:440px;}
+@media (max-width:640px){
+  #app{padding:0 20px 100px;}
+
+  .app-header{padding:22px 0 16px;}
+  .brand-title{font-size:26px;}
+  .brand-eyebrow{font-size:12px;}
+  .sync-pill{font-size:12.5px;padding:7px 13px;}
+
+  .cal-wrap{margin-top:20px;}
+  .cal-month{font-size:18px;}
+  .cal-nav button{width:32px;height:32px;font-size:17px;}
+  .cal-grid{gap:6px;}
+  .cal-dow{flex:0 0 calc((100% - 36px)/7);max-width:none;font-size:12px;padding-bottom:6px;}
+  .cal-cell{flex:0 0 calc((100% - 36px)/7);max-width:none;height:48px;}
+  .cal-daynum{font-size:15px;}
+
+  .day-strip{padding:13px 16px;font-size:13.5px;}
+  .day-strip strong{font-size:15px;}
+
+  .banners{margin-top:30px;gap:20px;}
+  .banner{border-radius:18px;}
+  .banner-head{padding:20px 20px 18px;}
+  .banner-stamp{width:48px;height:48px;font-size:20px;}
+  .banner-name{font-size:20px;}
+  .banner-sub{font-size:13px;margin-top:3px;}
+  .banner-today-check{width:26px;height:26px;font-size:14px;}
+  .chevron{font-size:15px;}
+
+  .composer{padding:18px 20px;}
+  .composer textarea{font-size:17px;min-height:72px;}
+  .composer textarea::placeholder{font-size:15px;}
+  .tool-btn{width:38px;height:38px;font-size:19px;}
+  .send-btn{font-size:14.5px;padding:10px 20px;}
+
+  .feed{padding:10px 20px 20px;gap:18px;max-height:none;}
+  .entry-time{font-size:12.5px;}
+  .entry-text{font-size:17px;line-height:1.8;}
+  .entry-file,.entry-link{font-size:14.5px;padding:10px 12px;}
+
+  .fab-sync{width:54px;height:54px;font-size:21px;bottom:26px;right:20px;}
 }
 </style>
 </head>
@@ -289,8 +326,8 @@ a{color:var(--stamp);}
   <header class="app-header">
     <div class="header-row">
       <div class="brand">
-        <span class="brand-eyebrow">Daily Momory</span>
-        <span class="brand-title">자기계발 기록</span>
+        <span class="brand-eyebrow">Daily Memory</span>
+        <span class="brand-title">자기계발 장부</span>
       </div>
       <button class="sync-pill" id="syncPillBtn">
         <span class="sync-dot off" id="syncDot"></span>
@@ -325,7 +362,7 @@ a{color:var(--stamp);}
   <div class="sync-sheet">
     <button class="sync-close" id="syncCloseBtn">×</button>
     <h3>기기 동기화</h3>
-    <p>이 기록을 다른 기기(휴대폰 ↔ PC)와 연결해서 같은 기록을 보고 쓸 수 있습니다. 코드를 아는 사람은 누구나 접근할 수 있으니 비밀번호처럼 보관하세요.</p>
+    <p>이 장부를 다른 기기(휴대폰 ↔ PC)와 연결해서 같은 기록을 보고 쓸 수 있습니다. 코드를 아는 사람은 누구나 접근할 수 있으니 비밀번호처럼 보관하세요.</p>
 
     <div id="syncMyCodeBlock">
       <p style="margin-bottom:6px;font-weight:600;color:var(--ink);">이 기기의 연결 코드</p>
