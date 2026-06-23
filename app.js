@@ -16,14 +16,12 @@ const BANNERS = [
 // 주의: 이 프로젝트는 사용자가 본인 Firebase 콘솔에서 새로 생성한 뒤
 // 아래 값을 교체해야 동작합니다. (README 참고)
 const FIREBASE_CONFIG = {
-  apiKey:"AIzaSyCZA9q-O5gF8VrneU9s1u_MbbE-ylmUBQ8",
-  authDomain: "revise-9bbdc.firebaseapp.com",
-  projectId: "revise-9bbdc",
-  storageBucket: "revise-9bbdc.firebasestorage.app",
-  messagingSenderId: "301746722763",
-  appId: "1:301746722763:web:9b75dfeffab0f10dc7c84e",
-  measurementId: "G-LPPN2G5HGP"
-
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME.firebaseapp.com",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME.appspot.com",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME"
 };
 
 let fbApp=null, fbAuth=null, fbDB=null, fbUid=null, syncGroupId=null, syncCode=null;
@@ -154,7 +152,16 @@ function attachRealtimeListener(){
   entriesUnsub = fbDB.collection('syncGroups').doc(syncGroupId)
     .collection('entries').orderBy('createdAt','desc').limit(2000)
     .onSnapshot(snap=>{
-      entries = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      const remote = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      // 아직 동기화되지 않은 로컬 전용 항목(local-/temp-)은 보존하여 합친다.
+      // → Firestore 저장 실패/대용량 사진 항목이 덮어써져 사라지는 것을 방지
+      const localOnly = entries.filter(e=>{
+        const id = String(e.id);
+        return id.startsWith('local-') || id.startsWith('temp-');
+      });
+      const merged = [...localOnly, ...remote];
+      merged.sort((a,b)=>b.createdAt-a.createdAt);
+      entries = merged;
       // Firebase 데이터를 받을 때마다 localStorage에도 항상 백업
       localSave(entries);
       renderAll();
@@ -183,16 +190,32 @@ async function addEntry(bannerId, text, attachments){
     entries.unshift(entry);
     localSave(entries);
     renderAll();
-    // Firebase에도 저장 (성공하면 onSnapshot이 실제 ID로 교체)
-    fbDB.collection('syncGroups').doc(syncGroupId).collection('entries').add({
+
+    // Firestore 문서 1MB 한도 점검. 너무 크면 업로드를 건너뛰고 로컬에만 보관.
+    const payload = {
       bannerId: entry.bannerId,
       text: entry.text,
       attachments: entry.attachments,
       createdAt: entry.createdAt,
       dateKey: entry.dateKey,
-    }).catch(e=>{
+    };
+    const approxBytes = JSON.stringify(payload).length;
+    if(approxBytes > 950*1024){
+      console.warn('기록 용량이 커서 동기화는 건너뛰고 로컬에만 저장합니다.', approxBytes);
+      // 동기화 안 된 항목임을 표시(로컬 전용)
+      entry.id = 'local-' + now + '-' + Math.random().toString(36).slice(2,7);
+      localSave(entries);
+      return;
+    }
+
+    // Firebase에도 저장 (성공하면 onSnapshot이 실제 ID로 교체)
+    fbDB.collection('syncGroups').doc(syncGroupId).collection('entries').add(payload)
+    .catch(e=>{
       console.error('Firebase 저장 실패, 로컬에 유지', e);
-      // Firebase 실패해도 로컬에는 이미 저장되어 있어서 데이터 유지됨
+      // 실패하면 로컬 전용 ID로 고정해 onSnapshot 덮어쓰기로 사라지지 않게 함
+      entry.id = 'local-' + now + '-' + Math.random().toString(36).slice(2,7);
+      localSave(entries);
+      renderAll();
     });
   } else {
     fallbackLocalAdd(entry);
@@ -428,6 +451,51 @@ function fileToDataUrl(file){
   });
 }
 
+/* 이미지 자동 리사이즈 + 압축
+   - 긴 변을 maxDim(px) 이하로 축소
+   - JPEG 품질을 단계적으로 낮춰 목표 용량(maxBytes) 이하로 맞춤
+   - Firestore 문서 1MB 한도를 넘지 않도록 충분히 작게 만든다
+   → 원본 사진을 그대로 넣지 않으므로 'invalid nested entity' / 용량 초과를 방지 */
+async function compressImage(file, maxDim=1280, maxBytes=380*1024){
+  // 이미지가 아니면 그냥 원본 dataUrl 반환
+  if(!file.type || !file.type.startsWith('image/')){
+    return fileToDataUrl(file);
+  }
+  const srcUrl = await fileToDataUrl(file);
+  const img = await new Promise((res,rej)=>{
+    const im = new Image();
+    im.onload = ()=>res(im);
+    im.onerror = rej;
+    im.src = srcUrl;
+  });
+
+  let { width, height } = img;
+  if(width > maxDim || height > maxDim){
+    if(width >= height){ height = Math.round(height * maxDim / width); width = maxDim; }
+    else { width = Math.round(width * maxDim / height); height = maxDim; }
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+
+  // base64 길이 ≈ bytes * 1.37. 목표 바이트를 base64 문자열 길이로 환산.
+  const targetLen = Math.floor(maxBytes * 1.37);
+  let quality = 0.82;
+  let out = canvas.toDataURL('image/jpeg', quality);
+  // 품질을 낮춰가며 목표 용량 이하로
+  while(out.length > targetLen && quality > 0.4){
+    quality -= 0.12;
+    out = canvas.toDataURL('image/jpeg', quality);
+  }
+  // 그래도 크면 해상도를 한 번 더 줄여 재시도
+  if(out.length > targetLen && maxDim > 720){
+    return compressImage(file, 900, maxBytes);
+  }
+  return out;
+}
+
 function bindBannerEvents(){
   // 펼치기/접기
   document.querySelectorAll('[data-toggle]').forEach(head=>{
@@ -468,11 +536,22 @@ function bindBannerEvents(){
       const id = inp.getAttribute('data-imginput');
       const file = ev.target.files[0];
       if(!file) return;
-      const dataUrl = await fileToDataUrl(file);
-      pendingAttachments[id] = pendingAttachments[id] || [];
-      pendingAttachments[id].push({type:'image', name:file.name, dataUrl});
-      expandedBanner = id;
-      renderBanners();
+      const btn = document.querySelector(`[data-imgbtn="${id}"]`);
+      const prevLabel = btn ? btn.textContent : null;
+      if(btn){ btn.disabled = true; btn.textContent = '⏳'; }
+      try{
+        const dataUrl = await compressImage(file);
+        pendingAttachments[id] = pendingAttachments[id] || [];
+        pendingAttachments[id].push({type:'image', name:file.name, dataUrl});
+        expandedBanner = id;
+        renderBanners();
+      }catch(e){
+        console.error('이미지 처리 실패', e);
+        alert('이미지를 처리하지 못했습니다. 다른 사진으로 시도해주세요.');
+      }finally{
+        if(btn){ btn.disabled = false; btn.textContent = prevLabel; }
+        inp.value = ''; // 같은 파일 다시 선택 가능하도록 초기화
+      }
     });
   });
 
