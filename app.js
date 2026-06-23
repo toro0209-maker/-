@@ -1,5 +1,5 @@
 /* =========================================================
-   자기계발 기록 — app.js
+   자기계발 장부 — app.js
    디자인 A(클래식 저널) / 5배너 / 달력 진행률 / Firebase 동기화
    ========================================================= */
 
@@ -8,27 +8,53 @@ const BANNERS = [
   { id:'wealth',    name:'부자가 되는 생각', color:'#8B3A2F', initial:'富', sub:'마인드 · 루틴 · 결심' },
   { id:'language',  name:'언어 개발',        color:'#5C7A5E', initial:'語', sub:'영어 · 표현 · 학습' },
   { id:'mindset',   name:'마인드셋',         color:'#9C7A3C', initial:'心', sub:'사색 · 명상 · 회고' },
-  { id:'specialist',name:'스페셜리스트',     color:'#3B5B6B', initial:'技', sub:'업무 · 전문성' },
+  { id:'specialist',name:'스페셜리스트',     color:'#3B5B6B', initial:'技', sub:'기술사 · 전문성' },
   { id:'invest',    name:'투자',             color:'#6B4C8A', initial:'財', sub:'시장 · 종목 · 기록' },
 ];
 
 // ----- 2. Firebase 설정 -----
 // 주의: 이 프로젝트는 사용자가 본인 Firebase 콘솔에서 새로 생성한 뒤
 // 아래 값을 교체해야 동작합니다. (README 참고)
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCZA9q-O5gF8VrneU9s1u_MbbE-ylmUBQ8",
+const FIREBASE_CONFIG = {
+  apiKey:"AIzaSyCZA9q-O5gF8VrneU9s1u_MbbE-ylmUBQ8",
   authDomain: "revise-9bbdc.firebaseapp.com",
   projectId: "revise-9bbdc",
   storageBucket: "revise-9bbdc.firebasestorage.app",
   messagingSenderId: "301746722763",
   appId: "1:301746722763:web:9b75dfeffab0f10dc7c84e",
   measurementId: "G-LPPN2G5HGP"
+
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+let fbApp=null, fbAuth=null, fbDB=null, fbUid=null, syncGroupId=null, syncCode=null;
+let entriesUnsub=null;
+let firebaseReady=false;
+
+function initFirebase(){
+  try{
+    if(FIREBASE_CONFIG.apiKey === "REPLACE_ME"){
+      console.warn("Firebase 설정이 아직 비어있습니다. README의 안내를 따라 설정해주세요.");
+      return;
+    }
+    fbApp = firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fbDB = firebase.firestore();
+    firebaseReady = true;
+    fbAuth.onAuthStateChanged(async (user)=>{
+      if(user){
+        fbUid = user.uid;
+        await loadOrCreateSyncIdentity();
+        attachRealtimeListener();
+        updateSyncUI();
+      } else {
+        await fbAuth.signInAnonymously().catch(e=>console.error("익명 로그인 실패", e));
+      }
+    });
+  }catch(e){
+    console.error("Firebase 초기화 실패", e);
+  }
+}
+
 // 사람이 읽기 쉬운 8자리 코드 생성 (영숫자, 혼동 문자 제외)
 function genFriendlyCode(){
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
