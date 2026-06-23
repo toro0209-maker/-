@@ -16,13 +16,12 @@ const BANNERS = [
 // 주의: 이 프로젝트는 사용자가 본인 Firebase 콘솔에서 새로 생성한 뒤
 // 아래 값을 교체해야 동작합니다. (README 참고)
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAI412t3-6RclfyzuIzGLq2M9Al_xeGIzE",
-  authDomain: "re-revise.firebaseapp.com",
-  projectId: "re-revise",
-  storageBucket: "re-revise.firebasestorage.app",
-  messagingSenderId: "146827056250",
-  appId: "1:146827056250:web:8bd9e2838ffc1c3cda17c3",
-  measurementId: "G-74RH24EXS7"
+  apiKey: "AIza...",
+  authDomain: "growth-ledger.firebaseapp.com",
+  projectId: "growth-ledger",
+  storageBucket: "growth-ledger.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234...:web:abc..."
 };
 
 let fbApp=null, fbAuth=null, fbDB=null, fbUid=null, syncGroupId=null, syncCode=null;
