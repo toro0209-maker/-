@@ -1,6 +1,6 @@
 {
-  "name": "자기계발 기록",
-  "short_name": "기록",
+  "name": "자기계발 장부",
+  "short_name": "장부",
   "description": "5가지 성장 축(부자가 되는 생각, 언어 개발, 마인드셋, 스페셜리스트, 투자)을 매일 기록하는 자기계발 플랫폼",
   "start_url": "./index.html",
   "scope": "./",
