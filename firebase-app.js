@@ -8,7 +8,7 @@ const BANNERS = [
   { id:'wealth',    name:'부자가 되는 생각', color:'#8B3A2F', initial:'富', sub:'마인드 · 루틴 · 결심' },
   { id:'language',  name:'언어 개발',        color:'#5C7A5E', initial:'語', sub:'영어 · 표현 · 학습' },
   { id:'mindset',   name:'마인드셋',         color:'#9C7A3C', initial:'心', sub:'사색 · 명상 · 회고' },
-  { id:'specialist',name:'스페셜리스트',     color:'#3B5B6B', initial:'技', sub:'기술사 · 전문성' },
+  { id:'specialist',name:'스페셜리스트',     color:'#3B5B6B', initial:'技', sub:'업무 · 전문성' },
   { id:'invest',    name:'투자',             color:'#6B4C8A', initial:'財', sub:'시장 · 종목 · 기록' },
 ];
 
