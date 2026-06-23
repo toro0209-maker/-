@@ -1,5 +1,5 @@
 /* =========================================================
-   자기계발 장부 — app.js
+   자기계발 기록 — app.js
    디자인 A(클래식 저널) / 5배너 / 달력 진행률 / Firebase 동기화
    ========================================================= */
 
@@ -8,7 +8,7 @@ const BANNERS = [
   { id:'wealth',    name:'부자가 되는 생각', color:'#8B3A2F', initial:'富', sub:'마인드 · 루틴 · 결심' },
   { id:'language',  name:'언어 개발',        color:'#5C7A5E', initial:'語', sub:'영어 · 표현 · 학습' },
   { id:'mindset',   name:'마인드셋',         color:'#9C7A3C', initial:'心', sub:'사색 · 명상 · 회고' },
-  { id:'specialist',name:'스페셜리스트',     color:'#3B5B6B', initial:'技', sub:'기술사 · 전문성' },
+  { id:'specialist',name:'스페셜리스트',     color:'#3B5B6B', initial:'技', sub:'업무 · 전문성' },
   { id:'invest',    name:'투자',             color:'#6B4C8A', initial:'財', sub:'시장 · 종목 · 기록' },
 ];
 
@@ -16,44 +16,30 @@ const BANNERS = [
 // 주의: 이 프로젝트는 사용자가 본인 Firebase 콘솔에서 새로 생성한 뒤
 // 아래 값을 교체해야 동작합니다. (README 참고)
 const firebaseConfig = {
-  apiKey: "AIzaSyBx8z26SQH3SUJ5jtnxKSkSMx9i0v1x2Z4",
-  authDomain: "success-archive.firebaseapp.com",
-  projectId: "success-archive",
-  storageBucket: "success-archive.firebasestorage.app",
-  messagingSenderId: "815931442128",
-  appId: "1:815931442128:web:76b32ec92efc77f953afd5",
-  measurementId: "G-2GVQ0E288X"
+  apiKey: "AIzaSyCZA9q-O5gF8VrneU9s1u_MbbE-ylmUBQ8",
+  authDomain: "revise-9bbdc.firebaseapp.com",
+  projectId: "revise-9bbdc",
+  storageBucket: "revise-9bbdc.firebasestorage.app",
+  messagingSenderId: "301746722763",
+  appId: "1:301746722763:web:9b75dfeffab0f10dc7c84e",
+  measurementId: "G-LPPN2G5HGP"
 };
 
-let fbApp=null, fbAuth=null, fbDB=null, fbUid=null, syncGroupId=null, syncCode=null;
-let entriesUnsub=null;
-let firebaseReady=false;
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCZA9q-O5gF8VrneU9s1u_MbbE-ylmUBQ8",
+  authDomain: "revise-9bbdc.firebaseapp.com",
+  projectId: "revise-9bbdc",
+  storageBucket: "revise-9bbdc.firebasestorage.app",
+  messagingSenderId: "301746722763",
+  appId: "1:301746722763:web:9b75dfeffab0f10dc7c84e",
+  measurementId: "G-LPPN2G5HGP"
+};
 
-function initFirebase(){
-  try{
-    if(FIREBASE_CONFIG.apiKey === "REPLACE_ME"){
-      console.warn("Firebase 설정이 아직 비어있습니다. README의 안내를 따라 설정해주세요.");
-      return;
-    }
-    fbApp = firebase.initializeApp(FIREBASE_CONFIG);
-    fbAuth = firebase.auth();
-    fbDB = firebase.firestore();
-    firebaseReady = true;
-    fbAuth.onAuthStateChanged(async (user)=>{
-      if(user){
-        fbUid = user.uid;
-        await loadOrCreateSyncIdentity();
-        attachRealtimeListener();
-        updateSyncUI();
-      } else {
-        await fbAuth.signInAnonymously().catch(e=>console.error("익명 로그인 실패", e));
-      }
-    });
-  }catch(e){
-    console.error("Firebase 초기화 실패", e);
-  }
-}
-
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 // 사람이 읽기 쉬운 8자리 코드 생성 (영숫자, 혼동 문자 제외)
 function genFriendlyCode(){
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -154,9 +140,14 @@ function attachRealtimeListener(){
     .collection('entries').orderBy('createdAt','desc').limit(2000)
     .onSnapshot(snap=>{
       entries = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      // Firebase 데이터를 받을 때마다 localStorage에도 항상 백업
+      localSave(entries);
       renderAll();
     }, err=>{
       console.error('실시간 동기화 오류', err);
+      // Firebase 오류 시 localStorage에서 복구
+      const saved = localLoad();
+      if(saved.length > 0){ entries = saved; renderAll(); }
     });
 }
 
@@ -170,8 +161,24 @@ async function addEntry(bannerId, text, attachments){
     dateKey: todayYmd(),
   };
   if(firebaseReady && syncGroupId){
-    await fbDB.collection('syncGroups').doc(syncGroupId).collection('entries').add(entry)
-      .catch(e=>{ console.error('저장 실패, 로컬에만 보관', e); fallbackLocalAdd(entry); });
+    // Firebase 저장 전에 먼저 로컬에 낙관적 저장(Optimistic update)
+    // → 네트워크 지연/실패에도 기록이 즉시 보이고 사라지지 않음
+    const tempId = 'temp-' + now + '-' + Math.random().toString(36).slice(2,7);
+    entry.id = tempId;
+    entries.unshift(entry);
+    localSave(entries);
+    renderAll();
+    // Firebase에도 저장 (성공하면 onSnapshot이 실제 ID로 교체)
+    fbDB.collection('syncGroups').doc(syncGroupId).collection('entries').add({
+      bannerId: entry.bannerId,
+      text: entry.text,
+      attachments: entry.attachments,
+      createdAt: entry.createdAt,
+      dateKey: entry.dateKey,
+    }).catch(e=>{
+      console.error('Firebase 저장 실패, 로컬에 유지', e);
+      // Firebase 실패해도 로컬에는 이미 저장되어 있어서 데이터 유지됨
+    });
   } else {
     fallbackLocalAdd(entry);
   }
@@ -183,13 +190,14 @@ function fallbackLocalAdd(entry){
   renderAll();
 }
 async function deleteEntry(entry){
-  if(firebaseReady && syncGroupId && !String(entry.id).startsWith('local-')){
-    await fbDB.collection('syncGroups').doc(syncGroupId).collection('entries').doc(entry.id).delete()
-      .catch(e=>console.error('삭제 실패', e));
-  } else {
-    entries = entries.filter(e=>e.id!==entry.id);
-    localSave(entries);
-    renderAll();
+  // 로컬에서 먼저 제거 (즉각 반영)
+  entries = entries.filter(e=>e.id!==entry.id);
+  localSave(entries);
+  renderAll();
+  // Firebase에서도 제거
+  if(firebaseReady && syncGroupId && !String(entry.id).startsWith('local-') && !String(entry.id).startsWith('temp-')){
+    fbDB.collection('syncGroups').doc(syncGroupId).collection('entries').doc(entry.id).delete()
+      .catch(e=>console.error('Firebase 삭제 실패', e));
   }
 }
 
@@ -587,12 +595,12 @@ function bootLocalMode(){
   renderAll();
 }
 
+// 항상 로컬 데이터를 먼저 화면에 표시 (Firebase 연결 전에도 기록이 보임)
+entries = localLoad();
+renderAll();
+
+// Firebase 초기화 (연결되면 onSnapshot이 자동으로 최신 데이터로 교체)
 initFirebase();
-if(!firebaseReady){
-  bootLocalMode();
-} else {
-  renderAll(); // 인증 완료 전 빈 상태로 먼저 그려 깜빡임 줄이기
-}
 
 // 서비스워커 등록 (PWA)
 if('serviceWorker' in navigator){
