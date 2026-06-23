@@ -15,18 +15,7 @@ const BANNERS = [
 // ----- 2. Firebase 설정 -----
 // 주의: 이 프로젝트는 사용자가 본인 Firebase 콘솔에서 새로 생성한 뒤
 // 아래 값을 교체해야 동작합니다. (README 참고)
-const firebaseConfig = {
-  apiKey: "AIzaSyCZA9q-O5gF8VrneU9s1u_MbbE-ylmUBQ8",
-  authDomain: "revise-9bbdc.firebaseapp.com",
-  projectId: "revise-9bbdc",
-  storageBucket: "revise-9bbdc.firebasestorage.app",
-  messagingSenderId: "301746722763",
-  appId: "1:301746722763:web:9b75dfeffab0f10dc7c84e",
-  measurementId: "G-LPPN2G5HGP"
-};
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyCZA9q-O5gF8VrneU9s1u_MbbE-ylmUBQ8",
   authDomain: "revise-9bbdc.firebaseapp.com",
